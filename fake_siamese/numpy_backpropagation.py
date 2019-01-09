@@ -65,43 +65,38 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
     
     diff_activations_derivatives[hp.DIFF_L - 2] = a_d[hp.DIFF_L - 1] - y[i]
     for n in range(hp.DIFF_L - 3, 0, -1):
-      diff_activations_derivatives[n] = 
-          np.matmul(diff_weights[n].T, diff_activations_derivatives[n + 1])
+      diff_activations_derivatives[n] = \
+          np.matmul(diff_weights[n].T, diff_activations_derivatives[n + 1]) \
           * (a_d[n] * (1 - a_d[n]))
-    
-    twin1_activations_derivatives[hp.TWIN_L - 2] =
+
+    twin1_activations_derivatives[hp.TWIN_L - 2] = \
         2 * (a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
-    twin2_activations_derivatives[hp.TWIN_L - 2] =
+    twin2_activations_derivatives[hp.TWIN_L - 2] = \
         -1 * twin1_activations_derivatives[hp.TWIN_L - 2]
     for n in range(hp.TWIN_L - 3, 0, -1):
-      twin1_activations_derivaties[n] =
-          np.matmul(twin_weights[n].T, twin1_activations_derivatives[n + 1])
+      twin1_activations_derivatives[n] = \
+          np.matmul(twin_weights[n].T, twin1_activations_derivatives[n + 1]) \
           * (a_1[n] * (1 - a_1[n]))
-      twin2_activations_derivatives[n] =
-          np.matmul(twin_weights[n].T, twin2_activations_derivatives[n + 1])
+      twin2_activations_derivatives[n] = \
+          np.matmul(twin_weights[n].T, twin2_activations_derivatives[n + 1]) \
           * (a_2[n] * (1 - a_2[n]))
     
     for n in range(1, hp.DIFF_L):
-      diff_weights_gradients[n - 1] += 
-          np.matmul(diff_activation_gradients[n - 1], (a_d[n - 1])[np.newaxis].T)
+      diff_weights_gradients[n - 1] += \
+          np.matmul(diff_activations_derivatives[n - 1], (a_d[n - 1])[np.newaxis].T)
     for n in range(1, hp.TWIN_L):
-      twin_weights_gradients[n - 1] +=
-          np.matmul(twin_activation_gradients[n - 1], (a_1[n - 1])[np.newaxis].T)
-          + np.matmul(twin_activation_gradients[n - 1], (a_2[n - 1])[np.newaxis].T)
+      twin_weights_gradients[n - 1] += \
+          np.matmul(twin1_activations_derivatives[n - 1],
+                    (a_1[n - 1])[np.newaxis].T) \
+          + np.matmul(twin2_activations_derivatives[n - 1],
+                      (a_2[n - 1])[np.newaxis].T)
 
   # take their mean
   cost = cost/m
   for n in range(1, hp.DIFF_L):
-    regularization_offset = hp.REG_CONSTANT * diff_weights[n - 1]
-    diff_weights_gradients[n - 1] = diff_weights_gradients[n - 1]
-                                    / hp.SAMPLE_SIZE + regularization_offset
-    diff_weights_gradients[n-1][0] -= regularization_offset[0]
+    diff_weights_gradients[n - 1] = diff_weights_gradients[n - 1] / hp.SAMPLE_SIZE
 
   for n in range(1, hp.TWIN_L):
-    regularization_offset = hp.REG_CONSTANT * twin_weights[n - 1]
-    twin_weights_gradients[n - 1] = twin_weights_gradients[n - 1]
-                                    / hp.SAMPLE_SIZE + regularization_offset
-    twin_weights_gradients[n - 1][0] -= regularization_offset[0]
+    twin_weights_gradients[n - 1] = twin_weights_gradients[n - 1] / hp.SAMPLE_SIZE
 
-  return cost, twin_weights_gradients, \#twin_bias_gradients, \
-         diff_weights_gradients#, diff_bias_gradients
+  return cost, twin_weights_gradients, diff_weights_gradients
