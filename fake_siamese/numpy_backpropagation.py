@@ -8,8 +8,8 @@ def binary_cross_entropy(h, y):
   return -y * np.log(h) + (1 - y) * np.log(1 - h)
 
 def activation(prev, weights, bias):
-  prev_copy = np.concat((np.ones(hp.SAMPLE_SIZE), prev), axis=0)
-  weights_copy = np.concat((bias, weights), axis=1)
+  prev_copy = np.concatenate((np.ones(hp.SAMPLE_SIZE), prev), axis=0)
+  weights_copy = np.concatenate((bias, weights), axis=1)
   return sigmoid(np.matmul(weights_copy, prev_copy))
 
 def numpy_feedforward(x_1, x_2, twin_weights, diff_weights,
@@ -37,11 +37,18 @@ def numpy_feedforward(x_1, x_2, twin_weights, diff_weights,
 
   return a_1, a_2, a_d
 
+def regularize(weights, bias, gradients, layers):
+  for n in range(1, layers):
+    regularization_offset = hp.REG_CONSTANT
+        * np.concatenate((bias[n - 1], weights[n - 1], axis=1)
+    weights_gradients[n - 1] += regularization_offset
+    weights_gradients[n - 1][0] -= regularization_offset[0]
+
 def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
                     diff_weights, diff_bias):
   # zero initializes cost and gradients
   cost = np.float(0)
-  twin1_activations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
+ 5 twin1_activations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   twin2_activations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   twin_weights_gradients = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   #twin_bias_gradients = np.ndarray(hp.TWIN_L - 1, dtype=np.float)
@@ -92,16 +99,25 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
   # take their mean
   cost = cost/m
   for n in range(1, hp.DIFF_L):
-    regularization_offset = hp.REG_CONSTANT * diff_weights[n - 1]
-    diff_weights_gradients[n - 1] = diff_weights_gradients[n - 1]
-                                    / hp.SAMPLE_SIZE + regularization_offset
-    diff_weights_gradients[n-1][0] -= regularization_offset[0]
-
+    diff_weights_gradients[n - 1] = diff_weights_gradients[n - 1] / hp.SAMPLE_SIZE
   for n in range(1, hp.TWIN_L):
-    regularization_offset = hp.REG_CONSTANT * twin_weights[n - 1]
-    twin_weights_gradients[n - 1] = twin_weights_gradients[n - 1]
-                                    / hp.SAMPLE_SIZE + regularization_offset
-    twin_weights_gradients[n - 1][0] -= regularization_offset[0]
+    twin_weights_gradients[n - 1] = twin_weights_gradients[n - 1]/ hp.SAMPLE_SIZE
 
-  return cost, twin_weights_gradients, \#twin_bias_gradients, \
-         diff_weights_gradients#, diff_bias_gradients
+  #regularize(twin_weights, twin_bias, twin_weights_gradients, hp.TWIN_L)
+  #regularize(deep_weights, deep_bias, deep_weights_gradients, hp.DEEP_L)
+  return cost, twin_weights_gradients, diff_weights_gradients
+
+def numerical_derivative_approximation(twin_weights, twin_bias, 
+      diff_weights, diff_biasi, diff=true, (i, j, l)):
+  twin_weights_copy = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
+  twin_bias_copy = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
+  diff_weights_copy = np.ndarray(hp.DIFF_L - 1, dtype=np.matrix)
+  diff_bias_copy = np.ndarray(hp.DIFF_L - 1, dtype=np.ndarray)
+  twin_tangent = np.ndarray
+  for i in range(1, hp.TWIN_L):
+    twin_weights[i - 1] = twin_weights[i - 1] 
+    twin_bias[i - 1] = twin
+  for i in range(1, hp.DIFF_L):
+    diff_weights[i - 1] = np.random.rand(dim[0], dim[1]) - 0.5
+    diff_bias[i - 1]] = np.random.rand(dim[0]) - 0.5
+
