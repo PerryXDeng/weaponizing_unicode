@@ -8,9 +8,10 @@ def binary_cross_entropy(h, y):
   return -y * np.log(h) + (1 - y) * np.log(1 - h)
 
 def activation(prev, weights, bias):
-  prev_copy = np.r_[np.ones(prev.shape[1])[np.newaxis], prev]
+  prev = np.r_[np.ones(prev.shape[1])[np.newaxis], prev]
   weights_copy = np.c_[bias, weights]
-  return sigmoid(np.matmul(weights_copy, prev_copy))
+  # returns the new activation as well as the ones-appended previous activation
+  return sigmoid(np.matmul(weights_copy, prev)), prev
 
 def numpy_feedforward(x_1, x_2, twin_weights, joined_weights,
                       twin_bias, joined_bias):
@@ -25,15 +26,18 @@ def numpy_feedforward(x_1, x_2, twin_weights, joined_weights,
 
   # forward propagation of twins
   for i in range(1, hp.TWIN_L):
-    a_1[i] = activation(a_1[i - 1], twin_weights[i - 1], twin_bias[i - 1])
-    a_2[i] = activation(a_2[i - 1], twin_weights[i - 1], twin_bias[i - 1])
+    (a_1[i], a_1[i - 1]) = \
+        activation(a_1[i - 1], twin_weights[i - 1], twin_bias[i - 1])
+    (a_2[i], a_2[i - 1]) = \
+        activation(a_2[i - 1], twin_weights[i - 1], twin_bias[i - 1])
 
   # element wise squared diffrence of two twin network becomes the joined input
   a_d[0] = np.square(a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
 
   # forward propagation of the joined network
   for i in range(1, hp.JOINED_L):
-    a_d[i] = activation(a_d[i - 1], joined_weights[i - 1], joined_bias[i - 1])
+    (a_d[i], a_d[i - 1]) = \
+        activation(a_d[i - 1], joined_weights[i - 1], joined_bias[i - 1])
 
   return a_1, a_2, a_d
 
@@ -70,26 +74,30 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
     
     joined_activations_derivatives[hp.JOINED_L - 2] = \
         a_d[hp.JOINED_L - 1] - y[i]
-    for n in range(hp.JOINED_L - 3, -1, -1):
-      weights_concat = np.c_[joined_bias[n + 1], joined_weights[n + 1]]
-      breakpoint()
-      joined_activations_derivatives[n] = \
-          np.matmul(weights_concat.T, joined_activations_derivatives[n + 1]) \
-          * (a_d[n + 2] * (1 - a_d[n + 2]))
-    
+    for n in reversed(range(0, hp.JOINED_L - 2)):
+      try:
+        weights_concat = np.c_[joined_bias[n + 1], joined_weights[n + 1]]
+        joined_activations_derivatives[n] = \
+            np.matmul(weights_concat.T, joined_activations_derivatives[n + 1]) \
+            * (a_d[n + 1] * (1 - a_d[n + 1]))
+      except ValueError as e:
+        print(e)
+        breakpoint()
+        t = True
+
     twin1_activations_derivatives[hp.TWIN_L - 2] = \
         2 * (a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
     twin2_activations_derivatives[hp.TWIN_L - 2] = \
         -1 * twin1_activations_derivatives[hp.TWIN_L - 2]
-    for n in range(hp.TWIN_L - 3, -1, -1):
+    for n in reversed(range(0, hp.TWIN_L - 2)):
       weights_concat = np.c_[twin_bias[n + 1], twin_weights[n + 1]]
       breakpoint()
       twin1_activations_derivatives[n] = \
           np.matmul(weights_concat.T, twin1_activations_derivatives[n + 1]) \
-          * (a_1[n + 2] * (1 - a_1[n + 2]))
+          * (a_1[n + 1] * (1 - a_1[n + 1]))
       twin2_activations_derivatives[n] = \
           np.matmul(weights_concat.T, twin2_activations_derivatives[n + 1]) \
-          * (a_2[n + 2] * (1 - a_2[n + 2]))
+          * (a_2[n + 1] * (1 - a_2[n + 1]))
     
     for n in range(1, hp.JOINED_L):
       joined_weights_gradients[n - 1] += \
