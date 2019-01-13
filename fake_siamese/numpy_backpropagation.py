@@ -48,10 +48,10 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
                    joined_weights, joined_bias):
   # zero initializes cost and gradients
   modelcost = np.float(0)
-  twin1_activations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
-  twin2_activations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
+  twin1_transformations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
+  twin2_transformations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   twin_weights_gradients = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
-  joined_activations_derivatives = np.ndarray(hp.JOINED_L - 1, dtype=np.ndarray)
+  joined_transformations_derivatives = np.ndarray(hp.JOINED_L - 1, dtype=np.ndarray)
   joined_weights_gradients = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
   for i in range(1, hp.TWIN_L):
     twin_weights_gradients[i - 1] = np.matrix(
@@ -68,32 +68,34 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
                                         joined_weights, twin_bias, joined_bias)
     modelcost += binary_cross_entropy(a_d[hp.JOINED_L - 1], y[i])
     
-    joined_activations_derivatives[hp.JOINED_L - 2] = \
+    joined_transformations_derivatives[hp.JOINED_L - 2] = \
         a_d[hp.JOINED_L - 1] - y[i]
     for n in reversed(range(0, hp.JOINED_L - 2)):
-      joined_activations_derivatives[n] = \
-          np.matmul(joined_weights[n + 1].T, joined_activations_derivatives[n + 1]) \
+      joined_transformations_derivatives[n] = \
+          np.matmul(joined_weights[n + 1].T, joined_transformations_derivatives[n + 1]) \
           * (a_d[n + 1] * (1 - a_d[n + 1]))
-    twin1_activations_derivatives[hp.TWIN_L - 2] = \
+    twin1_transformations_derivatives[hp.TWIN_L - 2] = \
         2 * (a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
-    twin2_activations_derivatives[hp.TWIN_L - 2] = \
-        -1 * twin1_activations_derivatives[hp.TWIN_L - 2]
+    twin2_transformations_derivatives[hp.TWIN_L - 2] = \
+        -1 * twin1_transformations_derivatives[hp.TWIN_L - 2]
     for n in reversed(range(0, hp.TWIN_L - 2)):
-      twin1_activations_derivatives[n] = \
-          np.matmul(twin_weights[n + 1].T, twin1_activations_derivatives[n + 1]) \
+      twin1_transformations_derivatives[n] = \
+          np.matmul(twin_weights[n + 1].T, twin1_transformations_derivatives[n + 1]) \
           * (a_1[n + 1] * (1 - a_1[n + 1]))
-      twin2_activations_derivatives[n] = \
-          np.matmul(twin_weights[n + 1].T, twin2_activations_derivatives[n + 1]) \
+      twin2_transformations_derivatives[n] = \
+          np.matmul(twin_weights[n + 1].T, twin2_transformations_derivatives[n + 1]) \
           * (a_2[n + 1] * (1 - a_2[n + 1]))
     
     for n in range(1, hp.JOINED_L):
-      breakpoint()
+      ad_concat_1 = np.r_[np.ones(a_d[n - 1].shape[1])[np.newaxis], a_d[n - 1]]
       joined_weights_gradients[n - 1] += \
-          np.matmul(joined_activations_derivatives[n - 1], a_d[n - 1].T)
+          np.matmul(joined_transformations_derivatives[n - 1], ad_concat_1.T)
     for n in range(1, hp.TWIN_L):
+      a1_concat_1 = np.r_[np.ones(a_1[n - 1].shape[1])[np.newaxis], a_1[n - 1]]
+      a2_concat_1 = np.r_[np.ones(a_2[n - 1].shape[1])[np.newaxis], a_2[n - 1]]
       twin_weights_gradients[n - 1] += \
-          np.add(np.matmul(twin1_activations_derivatives[n - 1], a_1[n - 1].T)
-          , np.matmul(twin2_activations_derivatives[n - 1], a_2[n - 1].T))
+          np.add(np.matmul(twin1_transformations_derivatives[n - 1], a1_concat_1.T)
+          , np.matmul(twin2_transformations_derivatives[n - 1], a2_concat_1.T))
 
   # take their mean
   modelcost /= hp.SAMPLE_SIZE
