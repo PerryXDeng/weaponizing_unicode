@@ -19,9 +19,13 @@ def numpy_feedforward(x_1, x_2, twin_weights, joined_weights,
   a_2 = np.ndarray(hp.TWIN_L, dtype=np.matrix)
   a_d = np.ndarray(hp.JOINED_L, dtype=np.matrix)
 
-  # transposing (horizontal) 1D input vectors into feature vectors
-  a_1[0] = x_1[np.newaxis].T
-  a_2[0] = x_2[np.newaxis].T
+  # transposing horizontal input vectors (or matrices) into feature vectors
+  if len(x_1.shape) == 1:
+    a_1[0] = x_1[np.newaxis].T
+    a_2[0] = x_2[np.newaxis].T
+  else:
+    a_1[0] = x_1.T
+    a_2[0] = x_2.T
 
   # forward propagation of twins
   for i in range(1, hp.TWIN_L):
@@ -44,8 +48,8 @@ def regularize(weights, bias, gradients, layers):
     gradients[n - 1] += regularization_offset
     gradients[n - 1][0] -= regularization_offset[0]
 
-def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
-                   joined_weights, joined_bias):
+def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
+                     joined_weights, joined_bias):
   # zero initializes cost and gradients
   modelcost = np.float(0)
   twin1_transformations_derivatives = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
@@ -110,7 +114,7 @@ def cost_gradients(x_1, x_2, y, twin_weights, twin_bias,
   #regularize(deep_weights, deep_bias, deep_weights_gradients, hp.DEEP_L)
   return modelcost, twin_weights_gradients, joined_weights_gradients
 
-def numerical_derivative_approximation(twin_weights, twin_bias, 
+def numerical_derivative_approximation(x_1, x_2, twin_weights, twin_bias,
       joined_weights, joined_bias, i, j, l, joined=True):
   twin_weights_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   twin_bias_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
@@ -121,24 +125,74 @@ def numerical_derivative_approximation(twin_weights, twin_bias,
   twin_bias_copy_2 = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   joined_weights_copy_2 = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
   joined_bias_copy_2 = np.ndarray(hp.JOINED_L - 1, dtype=np.ndarray)
-  for i in range(1, hp.TWIN_L):
-    twin_weights_copy_1[i - 1] = twin_weights[i - 1]
-    twin_bias_copy_1[i - 1] = twin_bias[i - 1]
-    twin_weights_copy_2[i - 1] = twin_weights[i - 1]
-    twin_bias_copy_2[i - 1] = twin_bias[i - 1]
-  for i in range(1, hp.JOINED_L):
-    joined_weights_copy_1[i - 1] = joined_weights[i - 1]
-    joined_bias_copy_1[i - 1] = joined_bias[i - 1]
-    joined_weights_copy_2[i - 1] = joined_weights[i - 1]
-    joined_bias_copy_2[i - 1] = joined_bias[i - 1]
+  for n in range(1, hp.TWIN_L):
+    twin_weights_copy_1[n - 1] = twin_weights[n - 1]
+    twin_bias_copy_1[n - 1] = twin_bias[n - 1]
+    twin_weights_copy_2[n - 1] = twin_weights[n - 1]
+    twin_bias_copy_2[n - 1] = twin_bias[n - 1]
+  for n in range(1, hp.JOINED_L):
+    joined_weights_copy_1[n - 1] = joined_weights[n - 1]
+    joined_bias_copy_1[n - 1] = joined_bias[n - 1]
+    joined_weights_copy_2[n - 1] = joined_weights[n - 1]
+    joined_bias_copy_2[n - 1] = joined_bias[n - 1]
 
   if joined:
-    if j == 0:
-      new_bias_1 = np.ndarray.copy(joined_bias_copy_1[l])
-      new_bias_2 = np.ndarray.copy(joined_bias_copy_2[l])
-      new_bias_1[i] -= hp.NUMERICAL_DELTA
-      new_bias_2[i] += hp.NUMERICAL_DELTA
-      joined_bias_copy_1[l] = new_bias_1
-      joined_bias_copy_2[l] = new_bias_2
-    else:
-      return
+    bias_copy_1 = joined_bias_copy_1
+    bias_copy_2 = joined_bias_copy_2
+    weights_copy_1 = joined_weights_copy_1
+    weights_copy_2 = joined_weights_copy_2
+  else:
+    bias_copy_1 = twin_bias_copy_1
+    bias_copy_2 = twin_bias_copy_2
+    weights_copy_1 = twin_weights_copy_1
+    weights_copy_2 = twin_weights_copy_2
+
+  if j == 0:
+    new_bias_1 = np.ndarray.copy(bias_copy_1[l])
+    new_bias_2 = np.ndarray.copy(bias_copy_2[l])
+    new_bias_1[i] += hp.NUMERICAL_DELTA
+    new_bias_2[i] -= hp.NUMERICAL_DELTA
+    bias_copy_1[l] = new_bias_1
+    bias_copy_2[l] = new_bias_2
+  else:
+    new_weights_1 = np.ndarray.copy(weights_copy_1[l])
+    new_weights_2 = np.ndarray.copy(weights_copy_1[l])
+    new_weights_1[i][j - 1] += hp.NUMERICAL_DELTA
+    new_weights_2[i][j - 1] -= hp.NUMERICAL_DELTA
+    weights_copy_1[l] = new_weights_1
+    weights_copy_2[l] = new_weights_2
+
+  (_, _, out_1) = numpy_feedforward(x_1, x_2, twin_weights_copy_1,
+                            joined_weights_copy_1, twin_bias_copy_1,
+                            joined_bias_copy_1)
+  (_, _, out_2) = numpy_feedforward(x_1, x_2, twin_weights_copy_2,
+                            joined_weights_copy_2, twin_bias_copy_2,
+                            joined_bias_copy_2)
+
+  last = hp.JOINED_L - 1
+
+  return np.average((out_1[last] - out_2[last]) / (2 * hp.NUMERICAL_DELTA))
+
+def num_approx_aggregate(x1, x2,twin_weights, twin_bias, joined_weights,
+                         joined_bias):
+  twin_weights_gradients = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
+  joined_weights_gradients = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
+  for l in range(hp.TWIN_L - 1):
+    mat = np.zeros(shape=(hp.TWIN_NET[l + 1], hp.TWIN_NET[l] + 1))
+    for i in range(hp.TWIN_NET[l + 1]):
+      for j in range(hp.TWIN_NET[l] + 1):
+        mat[i][j] =  numerical_derivative_approximation(x1, x2, twin_weights,
+                                                       twin_bias, joined_weights
+                                                       , joined_bias, i, j, l,
+                                                       joined=False)
+    twin_weights_gradients[l] = mat
+  for l in range(hp.JOINED_L - 1):
+    mat = np.zeros(shape=(hp.JOINED_NET[l + 1], hp.JOINED_NET[l] + 1))
+    for i in range(hp.JOINED_NET[l + 1]):
+      for j in range(hp.JOINED_NET[l] + 1):
+        mat[i][j] = numerical_derivative_approximation(x1, x2, twin_weights,
+                                                       twin_bias, joined_weights
+                                                       , joined_bias, i, j, l,
+                                                       joined=True)
+    joined_weights_gradients[l] = mat
+  return twin_weights_gradients, joined_weights_gradients

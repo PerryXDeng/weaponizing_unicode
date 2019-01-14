@@ -23,17 +23,23 @@ def main():
 
   randinit_weights(twin_weights, joined_weights, twin_bias, joined_bias)
 
-  (cost, twin_weights_gradients, diff_weight_gradients) = \
-      nb.cost_gradients(x1, x2, y, twin_weights, twin_bias,
-                        joined_weights, joined_bias)
+  (cost, twin_weights_gradients, joined_weight_gradients) = \
+      nb.cost_derivatives(x1, x2, y, twin_weights, twin_bias,
+                          joined_weights, joined_bias)
+
+  (numerical_twin_gradients, numerical_joined_gradients) = \
+      nb.num_approx_aggregate(x1, x2, twin_weights, twin_bias,
+                              joined_weights, joined_bias)
   print("\nnp cost")
   print(cost)
   print("\nnp twin weights gradients")
   print(twin_weights_gradients)
-  #print("\nnp twin bias gradients")
-  #print(twin_bias_gradients)
-  print("\nnp diff weights gradients")
-  print(diff_weight_gradients)
+  print("\napproximated twin gradients")
+  print(numerical_twin_gradients)
+  print("\nnp joined weights gradients")
+  print(joined_weight_gradients)
+  print("\napproximated joined gradients")
+  print(numerical_joined_gradients)
 
 if __name__ == "__main__":
   main()
