@@ -63,21 +63,22 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
   for i in range(1, hp.JOINED_L):
     joined_weights_gradients[i - 1] = np.matrix(
         np.zeros((hp.JOINED_NET[i], hp.JOINED_NET[i - 1] + 1)))
-  #twin_bias_gradients.fill(0.)
-  #joined_bias_gradients.fill(0.)
 
-  # sums up the derivatives of cost for each sample 
+  # sum up the derivatives of cost for each sample 
   for i in range(0, hp.SAMPLE_SIZE):
     (a_1, a_2, a_d) = numpy_feedforward(x_1[i], x_2[i], twin_weights,
                                         joined_weights, twin_bias, joined_bias)
     modelcost += binary_cross_entropy(a_d[hp.JOINED_L - 1], y[i])
     
+    # backpropagate through joined network
     joined_transformations_derivatives[hp.JOINED_L - 2] = \
         a_d[hp.JOINED_L - 1] - y[i]
     for n in reversed(range(0, hp.JOINED_L - 2)):
       joined_transformations_derivatives[n] = \
           np.matmul(joined_weights[n + 1].T, joined_transformations_derivatives[n + 1]) \
           * (a_d[n + 1] * (1 - a_d[n + 1]))
+
+    # backpropagate through twin networks
     twin1_transformations_derivatives[hp.TWIN_L - 2] = \
         2 * (a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
     twin2_transformations_derivatives[hp.TWIN_L - 2] = \
@@ -89,7 +90,8 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
       twin2_transformations_derivatives[n] = \
           np.matmul(twin_weights[n + 1].T, twin2_transformations_derivatives[n + 1]) \
           * (a_2[n + 1] * (1 - a_2[n + 1]))
-    
+
+    # calculate gradients of weights in relation to their transformations
     for n in range(1, hp.JOINED_L):
       ad_concat_1 = np.r_[np.ones(a_d[n - 1].shape[1])[np.newaxis], a_d[n - 1]]
       joined_weights_gradients[n - 1] += \
@@ -116,11 +118,11 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
 
 def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
       joined_weights, joined_bias, i, j, l, joined=True):
+  # make two copies of the weights and biases
   twin_weights_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   twin_bias_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   joined_weights_copy_1 = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
   joined_bias_copy_1 = np.ndarray(hp.JOINED_L - 1, dtype=np.ndarray)
-
   twin_weights_copy_2 = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   twin_bias_copy_2 = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
   joined_weights_copy_2 = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
@@ -136,6 +138,7 @@ def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
     joined_weights_copy_2[n - 1] = joined_weights[n - 1]
     joined_bias_copy_2[n - 1] = joined_bias[n - 1]
 
+  # check which set of weights to change
   if joined:
     bias_copy_1 = joined_bias_copy_1
     bias_copy_2 = joined_bias_copy_2
@@ -147,6 +150,7 @@ def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
     weights_copy_1 = twin_weights_copy_1
     weights_copy_2 = twin_weights_copy_2
 
+  # copy and modify the weight/bias matrices at (i, j, l)
   if j == 0:
     new_bias_1 = np.ndarray.copy(bias_copy_1[l])
     new_bias_2 = np.ndarray.copy(bias_copy_2[l])
@@ -156,12 +160,14 @@ def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
     bias_copy_2[l] = new_bias_2
   else:
     new_weights_1 = np.ndarray.copy(weights_copy_1[l])
-    new_weights_2 = np.ndarray.copy(weights_copy_1[l])
+    new_weights_2 = np.ndarray.copy(weights_copy_2[l])
+    # j - 1 due to lack of biases
     new_weights_1[i][j - 1] += hp.NUMERICAL_DELTA
     new_weights_2[i][j - 1] -= hp.NUMERICAL_DELTA
     weights_copy_1[l] = new_weights_1
     weights_copy_2[l] = new_weights_2
 
+  # forward propagate
   (_, _, out_1) = numpy_feedforward(x_1, x_2, twin_weights_copy_1,
                             joined_weights_copy_1, twin_bias_copy_1,
                             joined_bias_copy_1)
@@ -169,11 +175,13 @@ def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
                             joined_weights_copy_2, twin_bias_copy_2,
                             joined_bias_copy_2)
 
+  # calculate costs for both sets of weights
   last = hp.JOINED_L - 1
-
-  return np.average((binary_cross_entropy(out_1[last], y) \
-      - binary_cross_entropy(out_2[last], y)) \
-      / (2 * hp.NUMERICAL_DELTA))
+  cost_1 = np.average(binary_cross_entropy(out_1[last], y))
+  cost_2 = np.average(binary_cross_entropy(out_2[last], y))
+  print("numerical costs: " + str(cost_1) + ", " + str(cost_2))
+  return (cost_1 - cost_2) \
+      / (2 * hp.NUMERICAL_DELTA)
 
 def num_approx_aggregate(x1, x2, y, twin_weights, twin_bias, joined_weights,
                          joined_bias):
