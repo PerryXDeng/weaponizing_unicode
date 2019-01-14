@@ -114,7 +114,7 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
   #regularize(deep_weights, deep_bias, deep_weights_gradients, hp.DEEP_L)
   return modelcost, twin_weights_gradients, joined_weights_gradients
 
-def numerical_derivative_approximation(x_1, x_2, twin_weights, twin_bias,
+def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
       joined_weights, joined_bias, i, j, l, joined=True):
   twin_weights_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   twin_bias_copy_1 = np.ndarray(hp.TWIN_L - 1, dtype=np.ndarray)
@@ -171,9 +171,11 @@ def numerical_derivative_approximation(x_1, x_2, twin_weights, twin_bias,
 
   last = hp.JOINED_L - 1
 
-  return np.average((out_1[last] - out_2[last]) / (2 * hp.NUMERICAL_DELTA))
+  return np.average((binary_cross_entropy(out_1[last], y) \
+      - binary_cross_entropy(out_2[last], y)) \
+      / (2 * hp.NUMERICAL_DELTA))
 
-def num_approx_aggregate(x1, x2,twin_weights, twin_bias, joined_weights,
+def num_approx_aggregate(x1, x2, y, twin_weights, twin_bias, joined_weights,
                          joined_bias):
   twin_weights_gradients = np.ndarray(hp.TWIN_L - 1, dtype=np.matrix)
   joined_weights_gradients = np.ndarray(hp.JOINED_L - 1, dtype=np.matrix)
@@ -181,7 +183,7 @@ def num_approx_aggregate(x1, x2,twin_weights, twin_bias, joined_weights,
     mat = np.zeros(shape=(hp.TWIN_NET[l + 1], hp.TWIN_NET[l] + 1))
     for i in range(hp.TWIN_NET[l + 1]):
       for j in range(hp.TWIN_NET[l] + 1):
-        mat[i][j] =  numerical_derivative_approximation(x1, x2, twin_weights,
+        mat[i][j] =  numerical_derivative_approximation(x1, x2, y, twin_weights,
                                                        twin_bias, joined_weights
                                                        , joined_bias, i, j, l,
                                                        joined=False)
@@ -190,7 +192,7 @@ def num_approx_aggregate(x1, x2,twin_weights, twin_bias, joined_weights,
     mat = np.zeros(shape=(hp.JOINED_NET[l + 1], hp.JOINED_NET[l] + 1))
     for i in range(hp.JOINED_NET[l + 1]):
       for j in range(hp.JOINED_NET[l] + 1):
-        mat[i][j] = numerical_derivative_approximation(x1, x2, twin_weights,
+        mat[i][j] = numerical_derivative_approximation(x1, x2, y, twin_weights,
                                                        twin_bias, joined_weights
                                                        , joined_bias, i, j, l,
                                                        joined=True)
