@@ -73,16 +73,28 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
     # backpropagate through joined network
     joined_transformations_derivatives[hp.JOINED_L - 2] = \
         a_d[hp.JOINED_L - 1] - y[i]
-    for n in reversed(range(0, hp.JOINED_L - 2)):
-      joined_transformations_derivatives[n] = \
-          np.matmul(joined_weights[n + 1].T, joined_transformations_derivatives[n + 1]) \
-          * (a_d[n + 1] * (1 - a_d[n + 1]))
 
+    for n in reversed(range(0, hp.JOINED_L - 2)):
+      # n is the n + 1 layer in the network
+      next_layer_transforms_gradients = joined_transformations_derivatives[n + 1]
+      next_layer_weights = joined_weights[n + 1]
+      this_layer_activations_gradients = a_d[n + 1] * (1 - a_d[n + 1])
+      joined_transformations_derivatives[n] = \
+          np.matmul(next_layer_weights.T, next_layer_transforms_gradients) \
+          * this_layer_activations_gradients
+    joined_input_derivatives = np.matmul(joined_weights[0].T, \
+                                         joined_transformations_derivatives[0])
+    
     # backpropagate through twin networks
+    outlayer = hp.TWIN_L - 1
+    a_1_out = a_1[outlayer]
+    a_2_out = a_2[outlayer]
     twin1_transformations_derivatives[hp.TWIN_L - 2] = \
-        2 * (a_1[hp.TWIN_L - 1] - a_2[hp.TWIN_L - 1])
+        2 * (a_1_out - a_2_out) * a_1_out * (1 - a_1_out) \
+        * joined_input_derivatives
     twin2_transformations_derivatives[hp.TWIN_L - 2] = \
-        -1 * twin1_transformations_derivatives[hp.TWIN_L - 2]
+        2 * (a_1_out - a_2_out) * a_2_out * (1 - a_2_out) \
+        * joined_input_derivatives
     for n in reversed(range(0, hp.TWIN_L - 2)):
       twin1_transformations_derivatives[n] = \
           np.matmul(twin_weights[n + 1].T, twin1_transformations_derivatives[n + 1]) \
@@ -106,11 +118,9 @@ def cost_derivatives(x_1, x_2, y, twin_weights, twin_bias,
   # take their mean
   modelcost /= hp.SAMPLE_SIZE
   for n in range(1, hp.JOINED_L):
-    joined_weights_gradients[n - 1] = \
-        joined_weights_gradients[n - 1] / hp.SAMPLE_SIZE
+    joined_weights_gradients[n - 1] /= hp.SAMPLE_SIZE
   for n in range(1, hp.TWIN_L):
-    twin_weights_gradients[n - 1] = twin_weights_gradients[n - 1] \
-                                    / hp.SAMPLE_SIZE
+    twin_weights_gradients[n - 1] /= hp.SAMPLE_SIZE
 
   #regularize(twin_weights, twin_bias, twin_weights_gradients, hp.TWIN_L)
   #regularize(deep_weights, deep_bias, deep_weights_gradients, hp.DEEP_L)
@@ -179,7 +189,7 @@ def numerical_derivative_approximation(x_1, x_2, y, twin_weights, twin_bias,
   last = hp.JOINED_L - 1
   cost_1 = np.average(binary_cross_entropy(out_1[last], y))
   cost_2 = np.average(binary_cross_entropy(out_2[last], y))
-  print("numerical costs: " + str(cost_1) + ", " + str(cost_2))
+  # print("numerical costs: " + str(cost_1) + ", " + str(cost_2))
   return (cost_1 - cost_2) \
       / (2 * hp.NUMERICAL_DELTA)
 
