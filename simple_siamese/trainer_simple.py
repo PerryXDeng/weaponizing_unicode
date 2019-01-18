@@ -1,6 +1,6 @@
-from fake_siamese import hyperparameters as hp
-from fake_siamese import fakedata as fd
-from fake_siamese import numpy_backpropagation as nb
+from simple_siamese import hyperparameters as hp
+from simple_siamese import input_generator as fd
+from simple_siamese import backpropagation_numpy as nb
 
 import numpy as np
 
