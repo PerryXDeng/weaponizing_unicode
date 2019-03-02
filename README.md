@@ -1,4 +1,4 @@
-this is where i backup some of the experiments i do for "fun"
+this is where i backup some of the experiments i do
 
 trying to implement this model with tensorflow:
 https://www.cs.cmu.edu/~rsalakhu/papers/oneshot1.pdf
