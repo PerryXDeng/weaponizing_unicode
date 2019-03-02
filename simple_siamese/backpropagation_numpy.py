@@ -1,4 +1,4 @@
-from simple_siamese import hyperparameters as hp
+import simple_siamese.hyperparameters as hp
 import numpy as np
 
 def sigmoid(z):

@@ -1,6 +1,6 @@
-from simple_siamese import hyperparameters as hp
-from simple_siamese import input_generator as fd
-from simple_siamese import backpropagation_numpy as nb
+import simple_siamese.hyperparameters as hp
+import simple_siamese.input_generator as fd
+import simple_siamese.backpropagation_numpy as nb
 
 import numpy as np
 
@@ -40,6 +40,15 @@ def main():
   print(joined_weight_gradients)
   print("\napproximated joined gradients")
   print(numerical_joined_gradients)
+
+  # for debugging purposes
+  sample_bp = joined_weight_gradients[hp.JOINED_L - 2][0][0]
+  sample_nu = numerical_joined_gradients[hp.JOINED_L - 2][0][0]
+  diff = sample_bp - sample_nu
+  diff *= diff
+  if diff[0] > 0.1:
+    print("\nSomething's wrong.")
+  
 
 if __name__ == "__main__":
   main()
