@@ -6,6 +6,7 @@ SEED = 42069
 # dims for input
 IMG_X = 28
 IMG_Y = 28
+NUM_CHANNELS = 1
 
 # constants for normalization of grayscaled inputs into (-0.5, 0.5)
 # Xnorm = (X - (RANGE / 2)) / RANGE
