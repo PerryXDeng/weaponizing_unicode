@@ -209,8 +209,8 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
 def training_test():
   epochs = 5
   num_pairs = 1000
-  tset1, tset2, tlabels = dp.generate_normalized_data(0.6 * num_pairs)
-  vset1, vset2, vlabels = dp.generate_normalized_data(0.2 * num_pairs)
+  tset1, tset2, tlabels = dp.generate_normalized_data(int(0.6 * num_pairs))
+  vset1, vset2, vlabels = dp.generate_normalized_data(int(0.2 * num_pairs))
   run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, epochs)
 
 if __name__ == "__main__":
