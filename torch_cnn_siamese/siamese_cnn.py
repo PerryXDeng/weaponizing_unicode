@@ -77,11 +77,10 @@ output = net(image)
 image = torch.randn(1, 1, 28, 28)
 output_2 = net(image)
 
-diff = output - output_2
+square_mean = torch.mul(output - output_2, 2)
+labels = torch.randn((1, 4096), dtype=torch.long)
+print(labels.shape)
 
-
-
-loss = cross(torch.mul(diff, diff), )
-
+loss = cross(square_mean, labels)
 loss.backward()
 optimizer.step()
