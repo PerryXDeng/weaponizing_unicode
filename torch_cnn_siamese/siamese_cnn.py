@@ -11,6 +11,17 @@ import imageio
 import numpy as np
 
 
+# Datasets
+trainset = torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=transforms.ToTensor())
+
+testset = torchvision.datasets.MNIST(root="./data", train=False, download=True, transform=transforms.ToTensor())
+
+# Loaders for Datasets
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+testloader = torch.utils.data.DataLoader(testset, batch_size=64)
+
+
+
 def conv_layer(in_channels, out_channels, kernel, pool=True):
     """
     Represents a single conv layer within the network, consisting of a 2D convolution, activating it with
@@ -42,9 +53,9 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = conv_layer(config.NUM_CHANNELS, 64, 3)
         self.conv2 = conv_layer(64, 128, 3)
-        self.conv3 = conv_layer(128, 128, 3)
-        self.conv4 = conv_layer(128, 256, 3)
-        self.conv5 = conv_layer(256, 4096, 3, False)
+        self.conv3 = conv_layer(128, 256, 3)
+        self.conv4 = conv_layer(256, 256, 3, False)
+        self.fc = nn.Linear(2304, 2304)
 
     def forward(self, x):
         """
@@ -53,17 +64,11 @@ class Net(nn.Module):
         :return: output of the network
         """
         x = self.conv1(x)
-        print(x.shape)
         x = self.conv2(x)
-        print(x.shape)
         x = self.conv3(x)
-        print(x.shape)
         x = self.conv4(x)
-        print(x.shape)
-        x = self.conv5(x)
-        print(x.shape)
-        x = x.view(-1, 4096)
-        print(x.shape)
+        x = x.view(-1, 2304)
+        x = self.fc(x)
         return torch.sigmoid(x)
 
 
@@ -71,16 +76,35 @@ net = Net()
 cross = nn.CrossEntropyLoss()
 optimizer = optim.Adam(net.parameters(), lr=.0001)
 
-image = torch.randn(1, 1, 28, 28)
-output = net(image)
 
-image = torch.randn(1, 1, 28, 28)
-output_2 = net(image)
+def train(num_epoch):
+    """
+    Function that handles the training loop of the network
+    :param num_epoch: number of times to loop through the dataset
+    :return: None
+    """
+    for epoch in range(num_epoch):
+        for i, data in enumerate(trainloader, 0):
+            image, label = data
+            image1, label1 = image[:len(image) // 2], label[:len(label) // 2]
+            image2, label2 = image[len(image) // 2:], label[:len(label) // 2]
 
-square_mean = torch.mul(output - output_2, 2)
-labels = torch.randn((1, 4096), dtype=torch.long)
-print(labels.shape)
+            # Zero grad
+            optimizer.zero_grad()
 
-loss = cross(square_mean, labels)
-loss.backward()
-optimizer.step()
+            # forward, backward, optimize
+            output = net(image1)
+            output_2 = net(image2)
+
+            square_mean = torch.mul(output - output_2, 2)
+
+            loss = cross(square_mean, label1)
+            loss.backward()
+            optimizer.step()
+
+            # print results
+            print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
+    print("Finished training")
+
+
+train(1)
