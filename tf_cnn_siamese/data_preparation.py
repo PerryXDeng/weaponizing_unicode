@@ -16,8 +16,9 @@ def generate_normalized_data(num_pairs):
 
 def inputs_placeholders():
   x_1 = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE,
-                                          conf.IMG_X, conf.IMG_Y))
+                                          conf.IMG_X, conf.IMG_Y, 1))
   x_2 = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE,
-                                          conf.IMG_X, conf.IMG_Y))
+                                          conf.IMG_X, conf.IMG_Y, 1))
   labels = tf.placeholder(conf.DTYPE, shape =(conf.BATCH_SIZE,))
   return x_1, x_2, labels
+

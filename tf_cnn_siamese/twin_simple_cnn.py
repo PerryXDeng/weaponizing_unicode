@@ -7,8 +7,8 @@ import sys
 
 
 def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
+               conv3_weights, conv3_biases, conv4_weights, conv4_biases,
                fc1_weights, fc1_biases, dropout = False):
-  # conv -> relu -> pool -> conv -> relu -> pool -> fully connected
   conv = tf.nn.conv2d(x,
                       conv1_weights,
                       strides=[1, 1, 1, 1],
@@ -29,11 +29,27 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
                         strides=[1, 2, 2, 1],
                         padding='SAME')
 
+  conv = tf.nn.conv2d(pool,
+                      conv3_weights,
+                      strides=[1, 1, 1, 1],
+                      padding='SAME')
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv3_biases))
+  pool = tf.nn.max_pool(relu,
+                        ksize=[1, 2, 2, 1],
+                        strides=[1, 2, 2, 1],
+                        padding='SAME')
+  # last conv layer has no pooling
+  conv = tf.nn.conv2d(pool,
+                      conv4_weights,
+                      strides=[1, 1, 1, 1],
+                      padding='SAME')
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv4_biases))
+
   # Reshape the feature map cuboid into a matrix for fc layers
-  pool_shape = pool.get_shape().as_list()
+  features_shape = relu.get_shape().as_list()
   features = tf.reshape(
     pool,
-    [pool_shape[0], pool_shape[1] * pool_shape[2] * pool_shape[3]])
+    [features_shape[0], features_shape[1] * features_shape[2] * features_shape[3]])
 
   # last fc_weights determine output dimensions
   fc = tf.nn.sigmoid(tf.matmul(features, fc1_weights) + fc1_biases)
@@ -45,13 +61,16 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
 
 
 def construct_logits_model(x_1, x_2, conv1_weights, conv1_biases, conv2_weights,
-                           conv2_biases, fc1_weights, fc1_biases,
+                           conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                           conv4_biases, fc1_weights, fc1_biases,
                            fcj_weights, fcj_biases, dropout=False):
   # actual neural nets (twin portion)
   twin_1 = single_cnn(x_1, conv1_weights, conv1_biases, conv2_weights,
-                      conv2_biases, fc1_weights, fc1_biases, dropout)
+                      conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                      conv4_biases, fc1_weights, fc1_biases, dropout)
   twin_2 = single_cnn(x_2, conv1_weights, conv1_biases, conv2_weights,
-                      conv2_biases, fc1_weights, fc1_biases, dropout)
+                      conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                      conv4_biases, fc1_weights, fc1_biases, dropout)
   # logits on squared difference (joined portion)
   sq_diff = tf.squared_difference(twin_1, twin_2)
   logits = tf.matmul(sq_diff, fcj_weights) + fcj_biases
@@ -59,21 +78,26 @@ def construct_logits_model(x_1, x_2, conv1_weights, conv1_biases, conv2_weights,
 
 
 def construct_full_model(x_1, x_2, conv1_weights, conv1_biases, conv2_weights,
-                         conv2_biases, fc1_weights, fc1_biases,
-                         fcj_weights, fcj_biases):
+                         conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                         conv4_biases, fc1_weights, fc1_biases, fcj_weights,
+                         fcj_biases):
   logits = construct_logits_model(x_1, x_2, conv1_weights, conv1_biases,
-                                  conv2_weights, conv2_biases, fc1_weights,
-                                  fc1_biases, fcj_weights, fcj_biases)
+                                  conv2_weights, conv2_biases, conv3_weights,
+                                  conv3_biases, conv4_weights, conv4_biases,
+                                  fc1_weights, fc1_biases, fcj_weights, fcj_biases)
   # actual neural network
   return tf.nn.sigmoid(logits)
 
 
 def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
-                             conv2_weights, conv2_biases, fc1_weights,
-                             fc1_biases, fcj_weights, fcj_biases,
+                             conv2_weights, conv2_biases, conv3_weights, conv3_biases,
+                             conv4_weights, conv4_biases,
+                             fc1_weights, fc1_biases, fcj_weights, fcj_biases,
                              dropout=False, lagrange=False):
   logits = construct_logits_model(x_1, x_2, conv1_weights, conv1_biases,
-                                  conv2_weights, conv2_biases, fc1_weights,
+                                  conv2_weights, conv2_biases, 
+                                  conv3_weights, conv3_biases, conv4_weights,
+                                  conv4_biases, fc1_weights,
                                   fc1_biases, fcj_weights, fcj_biases, dropout)
   # cross entropy loss on sigmoids of joined output and labels
   loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=labels,
@@ -107,12 +131,14 @@ def error_rate(predictions, labels):
 
 
 def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
-                     conv2_weights, conv2_biases, fc1_weights, fc1_biases,
-                     fcj_weights, fcj_biases):
+                     conv2_weights, conv2_biases, conv3_weights, conv3_biases,
+                     conv4_weights, conv4_biases, fc1_weights, fc1_biases,
+                     fcj_weights, fcj_biases, session):
   x_1, x_2, _ = dp.inputs_placeholders()
   model = construct_full_model(x_1, x_2, conv1_weights, conv1_biases,
-                                     conv2_weights, conv2_biases, fc1_weights,
-                                     fc1_biases, fcj_weights, fcj_biases)
+                               conv2_weights, conv2_biases, conv3_weights,
+                               conv3_biases, conv4_weights, conv4_biases,
+                               fc1_weights, fc1_biases, fcj_weights, fcj_biases)
   size = set_1.shape[0]
   if size < conf.BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
@@ -120,15 +146,15 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
   for begin in range(0, size, conf.BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
-      predictions[begin:end] = tf.Session.run(fetches=model,
-                                              feed_dict={
-                                                  x_1: set_1[begin:end, ...],
-                                                  x_2: set_2[begin:end, ...]})
+      predictions[begin:end] = session.run(fetches=model,
+                                           feed_dict={
+                                           x_1: set_1[begin:end, ...],
+                                           x_2: set_2[begin:end, ...]})
     else:
-      batch_predictions = tf.Session.run(fetches=model,
-                                         feed_dict={
-                                            x_1: set_1[-conf.BATCH_SIZE:, ...],
-                                            x_2: set_2[-conf.BATCH_SIZE:, ...]})
+      batch_predictions = session.run(fetches=model,
+                                      feed_dict={
+                                      x_1: set_1[-conf.BATCH_SIZE:, ...],
+                                      x_2: set_2[-conf.BATCH_SIZE:, ...]})
       predictions[begin:] = batch_predictions[begin - size:, :]
   return error_rate(predictions, labels)
 
@@ -138,16 +164,22 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   # input nodes
   x_1, x_2, labels = dp.inputs_placeholders()
   # twin portion variables
-  # 5x5 filter, depth 32.
-  conv1_weights = tf.Variable(tf.truncated_normal([5, 5, 32],
+  # 3x3 filter, depth 64.
+  conv1_weights = tf.Variable(tf.truncated_normal([3, 3, 1, 64],
                               stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
-  conv1_biases = tf.Variable(tf.zeros([32], dtype=conf.DTYPE))
-  conv2_weights = tf.Variable(tf.truncated_normal([5, 5, 32, 64],
+  conv1_biases = tf.Variable(tf.zeros([64], dtype=conf.DTYPE))
+  conv2_weights = tf.Variable(tf.truncated_normal([3, 3, 64, 128],
                               stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
-  conv2_biases = tf.Variable(tf.constant(0.1, shape=[64], dtype=conf.DTYPE))
+  conv2_biases = tf.Variable(tf.constant(0.1, shape=[128], dtype=conf.DTYPE))
+  conv3_weights = tf.Variable(tf.truncated_normal([3, 3, 128, 256],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
+  conv3_biases = tf.Variable(tf.zeros([256], dtype=conf.DTYPE))
+  conv4_weights = tf.Variable(tf.truncated_normal([3, 3, 256, 256],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
+  conv4_biases = tf.Variable(tf.constant(0.1, shape=[256], dtype=conf.DTYPE))
   # fully connected
-  conv_features = conf.IMG_X // 4 * conf.IMG_Y // 4 * 64
-  fc_features = 256
+  conv_features = 256 * 256
+  fc_features = 2304
   fc1_weights = tf.Variable(tf.truncated_normal([conv_features, fc_features],
                             stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
   fc1_biases = tf.Variable(tf.constant(0.1, shape=[512], dtype=conf.DTYPE))
@@ -158,7 +190,9 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   fcj_biases = tf.Variable(tf.constant(0.1, shape=[1], dtype=conf.DTYPE))
   optimizer, l, lr = construct_loss_optimizer(x_1, x_2, labels, conv1_weights,
                                              conv1_biases, conv2_weights,
-                                             conv2_biases, fc1_weights,
+                                             conv2_biases, conv3_weights,
+                                             conv3_biases, conv4_weights,
+                                             conv4_biases,fc1_weights,
                                              fc1_biases, fcj_weights, fcj_biases
                                              , dropout, lagrange)
   # creates session
@@ -187,12 +221,17 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         current_epoch = float(step) * conf.BATCH_SIZE / data_size
         train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
                                        conv1_biases, conv2_weights,
-                                       conv2_biases, fc1_weights, fc1_biases,
-                                       fcj_weights, fcj_biases)
+                                       conv2_biases, conv3_weights,
+                                       conv3_biases, conv4_weights,
+                                       conv4_biases, fc1_weights, fc1_biases,
+                                       fcj_weights, fcj_biases, sess)
         validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
                                             conv1_biases, conv2_weights,
-                                            conv2_biases, fc1_weights,
-                                            fc1_biases, fcj_weights, fcj_biases)
+                                            conv2_biases, conv3_weights,
+                                            conv3_biases, conv4_weights,
+                                            conv4_biases, fc1_weights,
+                                            fc1_biases, fcj_weights, fcj_biases,
+                                            sess)
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
         print('Minibatch Loss: %.3f, learning rate: %.6f' % (l, lr))
@@ -201,8 +240,11 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         sys.stdout.flush()
     validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
                                         conv1_biases, conv2_weights,
-                                        conv2_biases, fc1_weights,
-                                        fc1_biases, fcj_weights, fcj_biases)
+                                        conv2_biases, conv3_weights,
+                                        conv3_biases, conv4_weights,
+                                        conv4_biases, fc1_weights,
+                                        fc1_biases, fcj_weights, fcj_biases,
+                                        sess)
     print('Validation Error: %.1f%%' % validation_error)
 
 
