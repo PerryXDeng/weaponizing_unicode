@@ -21,7 +21,6 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
 testloader = torch.utils.data.DataLoader(testset, batch_size=64)
 
 
-
 def conv_layer(in_channels, out_channels, kernel, pool=True):
     """
     Represents a single conv layer within the network, consisting of a 2D convolution, activating it with
@@ -56,25 +55,34 @@ class Net(nn.Module):
         self.conv3 = conv_layer(128, 256, 3)
         self.conv4 = conv_layer(256, 256, 3, False)
         self.fc = nn.Linear(2304, 2304)
+        self.final = nn.Linear(2304, 1)
 
-    def forward(self, x):
+    def forward(self, x, y):
         """
         Siamese CNN model with layers of 2D Conv + ReLU combined with a MaxPool2D
         :param x: input to the network
         :return: output of the network
         """
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = x.view(-1, 2304)
-        x = self.fc(x)
-        return torch.sigmoid(x)
+        # Putting images through SiameseCNN
+        x, y = self.conv1(x), self.conv1(y)
+        x, y = self.conv2(x), self.conv2(y)
+        x, y = self.conv3(x), self.conv3(y)
+        x, y = self.conv4(x), self.conv4(y)
+
+        # Reshaping and getting FC layer output
+        x, y = x.view(-1, 2304), y.view(-1, 2304)
+        xfin = torch.sigmoid(self.fc(x))
+        yfin = torch.sigmoid(self.fc(y))
+
+        # Performing square mean and squaring
+        square_mean = torch.mul(xfin - yfin, 2)
+        result = self.final(square_mean)
+        return torch.sigmoid(result)
 
 
 net = Net()
 cross = nn.CrossEntropyLoss()
-optimizer = optim.Adam(net.parameters(), lr=.0001)
+optimizer = optim.Adam(net.parameters(), lr=.001)
 
 
 def train(num_epoch):
@@ -93,18 +101,16 @@ def train(num_epoch):
             optimizer.zero_grad()
 
             # forward, backward, optimize
-            output = net(image1)
-            output_2 = net(image2)
+            output = net(image1, image2)
 
-            square_mean = torch.mul(output - output_2, 2)
-
-            loss = cross(square_mean, label1)
+            loss = cross(output, label[:len(label) // 2])
             loss.backward()
             optimizer.step()
 
             # print results
-            print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
+            if i % 100 == 0:
+                print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
     print("Finished training")
 
 
-train(1)
+train(3)
