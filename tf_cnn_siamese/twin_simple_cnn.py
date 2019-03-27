@@ -17,7 +17,7 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
   pool = tf.nn.max_pool(relu,
                         ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1],
-                        padding='SAME')
+                        padding='VALID')
 
   conv = tf.nn.conv2d(pool,
                       conv2_weights,
@@ -27,7 +27,7 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
   pool = tf.nn.max_pool(relu,
                         ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1],
-                        padding='SAME')
+                        padding='VALID')
 
   conv = tf.nn.conv2d(pool,
                       conv3_weights,
@@ -37,7 +37,7 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
   pool = tf.nn.max_pool(relu,
                         ksize=[1, 2, 2, 1],
                         strides=[1, 2, 2, 1],
-                        padding='SAME')
+                        padding='VALID')
   # last conv layer has no pooling
   conv = tf.nn.conv2d(pool,
                       conv4_weights,
@@ -47,6 +47,7 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
 
   # Reshape the feature map cuboid into a matrix for fc layers
   features_shape = relu.get_shape().as_list()
+  print(features_shape)
   features = tf.reshape(
     pool,
     [features_shape[0], features_shape[1] * features_shape[2] * features_shape[3]])
@@ -178,12 +179,12 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                               stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
   conv4_biases = tf.Variable(tf.constant(0.1, shape=[256], dtype=conf.DTYPE))
   # fully connected
-  conv_features = 256 * 256
-  fc_features = 2304
+  conv_features = 2304 # dims of output from the convlutional layers of twins
+  fc_features = 2304 # dims of output from the fc layer of twins
   fc1_weights = tf.Variable(tf.truncated_normal([conv_features, fc_features],
                             stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE))
-  fc1_biases = tf.Variable(tf.constant(0.1, shape=[512], dtype=conf.DTYPE))
-  # joined portion variables, turns num_features into 1 probability
+  fc1_biases = tf.Variable(tf.constant(0.1, shape=[fc_features], dtype=conf.DTYPE))
+  # joined portion variables, turns fc_features into 1 probability
   fcj_weights = tf.Variable(tf.truncated_normal([fc_features, 1], stddev=0.1,
                                                 seed=conf.SEED,
                                                 dtype=conf.DTYPE))
