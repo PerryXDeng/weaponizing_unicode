@@ -23,3 +23,16 @@ def inputs_placeholders():
                                           conf.IMG_X, conf.IMG_Y, 1), name="x_2")
   labels = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE, 1), name="labels")
   return x_1, x_2, labels
+
+
+def save_fake_data():
+  x1,x2,y = generate_normalized_data(50000)
+  np.save("fakedata/trainx1.npy", x1)
+  np.save("fakedata/trainx2.npy", x2)
+  np.save("fakedata/trainy.npy", y)
+  x1,x2,y = generate_normalized_data(15000)
+  np.save("fakedata/testx1.npy", x1)
+  np.save("fakedata/testx2.npy", x2)
+  np.save("fakedata/testy.npy", y)
+
+save_fake_data()
