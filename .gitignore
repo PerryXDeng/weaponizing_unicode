@@ -93,3 +93,8 @@ ENV/
 
 # For mac
 .DS_Store
+
+# fake data
+*.npy
+
+
