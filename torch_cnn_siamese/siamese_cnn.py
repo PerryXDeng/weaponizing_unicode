@@ -1,16 +1,9 @@
-import torch_cnn_siamese.data_prep as util
-import torch_cnn_siamese.config as config
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as f
 import torch.optim as optim
 import torch.onnx as onnx
 import torchvision
 import torchvision.transforms as transforms
-import imageio
-
-import numpy as np
 
 
 # Datasets
@@ -52,7 +45,7 @@ class Net(nn.Module):
         Initialization for the network, defining the hidden layers of the model
         """
         super(Net, self).__init__()
-        self.conv1 = conv_layer(config.NUM_CHANNELS, 64, 3)
+        self.conv1 = conv_layer(1, 64, 3)
         self.conv2 = conv_layer(64, 128, 3)
         self.conv3 = conv_layer(128, 256, 3)
         self.conv4 = conv_layer(256, 256, 3, False)
@@ -62,7 +55,7 @@ class Net(nn.Module):
     def forward(self, params):
         """
         Siamese CNN model with layers of 2D Conv + ReLU combined with a MaxPool2D
-        :param x: input to the network
+        :param params: input tuple to the network, 'genuine' and 'fake' images
         :return: output of the network
         """
         x, y = params[0], params[1]
@@ -98,6 +91,10 @@ def train(num_epoch):
     for epoch in range(num_epoch):
         for i, data in enumerate(trainloader, 0):
             image, label = data
+
+            if len(image) != 64:
+                continue
+
             image1, label1 = image[:len(image) // 2], label[:len(label) // 2]
             image2, label2 = image[len(image) // 2:], label[:len(label) // 2]
 
@@ -113,12 +110,40 @@ def train(num_epoch):
             optimizer.step()
 
             # print results
-            # if i % 100 == 0:
-            print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
+            if i % 100 == 0:
+                print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
+
     print("Finished training")
 
 
-train(2)
+def test_net():
+    """
+    Function to handle testing the network for accuracy on the test set
+    The test images are images the network has never seen before
+    :return: None
+    """
+    total = correct = 0
+    with torch.no_grad():
+        for data in testloader:
+            image, label = data
+
+            image1, label1 = image[:len(image) // 2], label[:len(label) // 2]
+            image2, label2 = image[len(image) // 2:], label[:len(label) // 2]
+
+            output = net((image1, image2))
+            print(output)
+            total += 32
+            for num in output:
+                # Value to classify as a "correct" answer
+                if num >= .95:
+                    correct += 1
+            break
+    print("Accuracy of the network on the test set: ", 100 * correct / total, "%")
+
+
+test_net()
+train(1)
+test_net()
 
 # Model Saving for export
 # torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))), ), "siamese_cnn.onnx")
