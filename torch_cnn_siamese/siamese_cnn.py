@@ -5,9 +5,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as f
 import torch.optim as optim
+import torch.onnx as onnx
 import torchvision
 import torchvision.transforms as transforms
 import imageio
+
 import numpy as np
 
 
@@ -57,12 +59,14 @@ class Net(nn.Module):
         self.fc = nn.Linear(2304, 2304)
         self.final = nn.Linear(2304, 1)
 
-    def forward(self, x, y):
+    def forward(self, params):
         """
         Siamese CNN model with layers of 2D Conv + ReLU combined with a MaxPool2D
         :param x: input to the network
         :return: output of the network
         """
+        x, y = params[0], params[1]
+
         # Putting images through SiameseCNN
         x, y = self.conv1(x), self.conv1(y)
         x, y = self.conv2(x), self.conv2(y)
@@ -75,13 +79,13 @@ class Net(nn.Module):
         yfin = torch.sigmoid(self.fc(y))
 
         # Performing square mean and squaring
-        square_mean = torch.mul(xfin - yfin, 2)
+        square_mean = torch.mul(xfin.sub(yfin), 2)
         result = self.final(square_mean)
         return torch.sigmoid(result)
 
 
 net = Net()
-cross = nn.CrossEntropyLoss()
+cross = nn.BCELoss()
 optimizer = optim.Adam(net.parameters(), lr=.001)
 
 
@@ -101,16 +105,21 @@ def train(num_epoch):
             optimizer.zero_grad()
 
             # forward, backward, optimize
-            output = net(image1, image2)
+            output = net((image1, image2))
 
-            loss = cross(output, label[:len(label) // 2])
+            target = torch.ones((32, 1))
+            loss = cross(output, target)
             loss.backward()
             optimizer.step()
 
             # print results
-            if i % 100 == 0:
-                print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
+            # if i % 100 == 0:
+            print("Loss at iter", i, "in epoch", epoch, ": ", loss.data)
     print("Finished training")
 
 
-train(3)
+train(2)
+
+# Model Saving for export
+# torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))), ), "siamese_cnn.onnx")
+# torch.save(net, "siamese_cnn.pth")
