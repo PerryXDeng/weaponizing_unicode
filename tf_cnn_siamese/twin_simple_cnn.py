@@ -47,7 +47,6 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
 
   # Reshape the feature map cuboid into a matrix for fc layers
   features_shape = relu.get_shape().as_list()
-  print(features_shape)
   features = tf.reshape(
     pool,
     [features_shape[0], features_shape[1] * features_shape[2] * features_shape[3]])
@@ -136,6 +135,10 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
                      conv4_weights, conv4_biases, fc1_weights, fc1_biases,
                      fcj_weights, fcj_biases, session):
   x_1, x_2, _ = dp.inputs_placeholders()
+  print(x_1.shape())
+  print(set_1.shape)
+  print(x_2.shape())
+  print(set_2.shape)
   model = construct_full_model(x_1, x_2, conv1_weights, conv1_biases,
                                conv2_weights, conv2_biases, conv3_weights,
                                conv3_biases, conv4_weights, conv4_biases,
@@ -220,33 +223,39 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         elapsed_time = time.time() - start_time
         start_time = time.time()
         current_epoch = float(step) * conf.BATCH_SIZE / data_size
-        train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
-                                       conv1_biases, conv2_weights,
-                                       conv2_biases, conv3_weights,
-                                       conv3_biases, conv4_weights,
-                                       conv4_biases, fc1_weights, fc1_biases,
-                                       fcj_weights, fcj_biases, sess)
-        validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-                                            conv1_biases, conv2_weights,
-                                            conv2_biases, conv3_weights,
-                                            conv3_biases, conv4_weights,
-                                            conv4_biases, fc1_weights,
-                                            fc1_biases, fcj_weights, fcj_biases,
-                                            sess)
+        # train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
+        #                                conv1_biases, conv2_weights,
+        #                                conv2_biases, conv3_weights,
+        #                                conv3_biases, conv4_weights,
+        #                                conv4_biases, fc1_weights, fc1_biases,
+        #                                fcj_weights, fcj_biases, sess)
+        # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
+        #                                     conv1_biases, conv2_weights,
+        #                                     conv2_biases, conv3_weights,
+        #                                     conv3_biases, conv4_weights,
+        #                                     conv4_biases, fc1_weights,
+        #                                     fc1_biases, fcj_weights, fcj_biases,
+        #                                     sess)
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
-        print('Minibatch Loss: %.3f, learning rate: %.6f' % (l, lr))
-        print('Training Error: %.1f%%' % train_error)
-        print('Validation Error: %.1f%%' % validation_error)
+        # lf = tf.cast(l,float)[0]
+        # lrf = tf.cast(lr, float)[0]
+        print(l)
+        print(lr)
+        # print(lf)
+        # print(lrf)
+        # print('Minibatch Loss: %.3f, learning rate: %.6f' % (lf, lrf))
+        # print('Training Error: %.1f%%' % train_error)
+        # print('Validation Error: %.1f%%' % validation_error)
         sys.stdout.flush()
-    validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-                                        conv1_biases, conv2_weights,
-                                        conv2_biases, conv3_weights,
-                                        conv3_biases, conv4_weights,
-                                        conv4_biases, fc1_weights,
-                                        fc1_biases, fcj_weights, fcj_biases,
-                                        sess)
-    print('Validation Error: %.1f%%' % validation_error)
+    # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
+    #                                     conv1_biases, conv2_weights,
+    #                                     conv2_biases, conv3_weights,
+    #                                     conv3_biases, conv4_weights,
+    #                                     conv4_biases, fc1_weights,
+    #                                     fc1_biases, fcj_weights, fcj_biases,
+    #                                     sess)
+    # print('Validation Error: %.1f%%' % validation_error)
 
 
 def training_test():
