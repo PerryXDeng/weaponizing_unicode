@@ -100,8 +100,8 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
                                   conv4_biases, fc1_weights,
                                   fc1_biases, fcj_weights, fcj_biases, dropout)
   # cross entropy loss on sigmoids of joined output and labels
-  loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=labels,
-                                                                logits=logits))
+  loss_vec = tf.nn.sigmoid_cross_entropy_with_logits(labels=labels,logits=logits)
+  loss = tf.reduce_mean(loss_vec)
   if lagrange:
     # constraints on sigmoid layers
     regularizers = (tf.nn.l2_loss(fc1_weights) + tf.nn.l2_loss(fc1_biases) +
@@ -135,10 +135,6 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
                      conv4_weights, conv4_biases, fc1_weights, fc1_biases,
                      fcj_weights, fcj_biases, session):
   x_1, x_2, _ = dp.inputs_placeholders()
-  print(x_1.shape())
-  print(set_1.shape)
-  print(x_2.shape())
-  print(set_2.shape)
   model = construct_full_model(x_1, x_2, conv1_weights, conv1_biases,
                                conv2_weights, conv2_biases, conv3_weights,
                                conv3_biases, conv4_weights, conv4_biases,
@@ -150,10 +146,16 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
   for begin in range(0, size, conf.BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
+      s1 = set_1[begin:end, ...]
+      s2 = set_2[begin:end, ...]
+      print(s1.shape)
+      print(x_1.shape)
+      print(s2.shape)
+      print(x_2.shape)
       predictions[begin:end] = session.run(fetches=model,
                                            feed_dict={
-                                           x_1: set_1[begin:end, ...],
-                                           x_2: set_2[begin:end, ...]})
+                                           x_1: s1,
+                                           x_2: s2})
     else:
       batch_predictions = session.run(fetches=model,
                                       feed_dict={
@@ -238,28 +240,30 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         #                                     sess)
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
-        # lf = tf.cast(l,float)[0]
-        # lrf = tf.cast(lr, float)[0]
-        print(l)
-        print(lr)
-        # print(lf)
-        # print(lrf)
-        # print('Minibatch Loss: %.3f, learning rate: %.6f' % (lf, lrf))
+        loss,learning_rate = sess.run([l,lr], feed_dict=feed_dict)
+        print('Minibatch Loss: %.3f, learning rate: %.6f' % (loss, learning_rate))
         # print('Training Error: %.1f%%' % train_error)
         # print('Validation Error: %.1f%%' % validation_error)
         sys.stdout.flush()
-    # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-    #                                     conv1_biases, conv2_weights,
-    #                                     conv2_biases, conv3_weights,
-    #                                     conv3_biases, conv4_weights,
-    #                                     conv4_biases, fc1_weights,
-    #                                     fc1_biases, fcj_weights, fcj_biases,
-    #                                     sess)
-    # print('Validation Error: %.1f%%' % validation_error)
+    train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
+                                   conv1_biases, conv2_weights,
+                                   conv2_biases, conv3_weights,
+                                   conv3_biases, conv4_weights,
+                                   conv4_biases, fc1_weights, fc1_biases,
+                                   fcj_weights, fcj_biases, sess)
+    print('Training Error: %.1f%%' % train_error)
+    validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
+                                        conv1_biases, conv2_weights,
+                                        conv2_biases, conv3_weights,
+                                        conv3_biases, conv4_weights,
+                                        conv4_biases, fc1_weights,
+                                        fc1_biases, fcj_weights, fcj_biases,
+                                        sess)
+    print('Validation Error: %.1f%%' % validation_error)
 
 
 def training_test():
-  epochs = 5
+  epochs = 1
   num_pairs = 1000
   tset1, tset2, tlabels = dp.generate_normalized_data(int(0.6 * num_pairs))
   vset1, vset2, vlabels = dp.generate_normalized_data(int(0.2 * num_pairs))
