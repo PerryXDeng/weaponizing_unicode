@@ -65,12 +65,14 @@ def construct_logits_model(x_1, x_2, conv1_weights, conv1_biases, conv2_weights,
                            conv4_biases, fc1_weights, fc1_biases,
                            fcj_weights, fcj_biases, dropout=False):
   # actual neural nets (twin portion)
-  twin_1 = single_cnn(x_1, conv1_weights, conv1_biases, conv2_weights,
-                      conv2_biases, conv3_weights, conv3_biases, conv4_weights,
-                      conv4_biases, fc1_weights, fc1_biases, dropout)
-  twin_2 = single_cnn(x_2, conv1_weights, conv1_biases, conv2_weights,
-                      conv2_biases, conv3_weights, conv3_biases, conv4_weights,
-                      conv4_biases, fc1_weights, fc1_biases, dropout)
+  with tf.name_scope("twin_1"):
+    twin_1 = single_cnn(x_1, conv1_weights, conv1_biases, conv2_weights,
+                        conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                        conv4_biases, fc1_weights, fc1_biases, dropout)
+  with tf.name_scope("twin_2"):
+    twin_2 = single_cnn(x_2, conv1_weights, conv1_biases, conv2_weights,
+                        conv2_biases, conv3_weights, conv3_biases, conv4_weights,
+                        conv4_biases, fc1_weights, fc1_biases, dropout)
   # logits on squared difference (joined portion)
   sq_diff = tf.squared_difference(twin_1, twin_2)
   logits = tf.matmul(sq_diff, fcj_weights) + fcj_biases
@@ -148,10 +150,6 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
     if end <= size:
       s1 = set_1[begin:end, ...]
       s2 = set_2[begin:end, ...]
-      print(s1.shape)
-      print(x_1.shape)
-      print(s2.shape)
-      print(x_2.shape)
       predictions[begin:end] = session.run(fetches=model,
                                            feed_dict={
                                            x_1: s1,
@@ -217,7 +215,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   start_time = time.time()
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
-    print('Initialized!')
+    logger = tf.summary.FileWriter(conf.log_dir)
     # iterates through the training data in batch
     data_size = tset1.shape[0]
     total = int(epochs * data_size)
@@ -257,21 +255,22 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         # print('Training Error: %.1f%%' % train_error)
         # print('Validation Error: %.1f%%' % validation_error)
         sys.stdout.flush()
-    train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
-                                   conv1_biases, conv2_weights,
-                                   conv2_biases, conv3_weights,
-                                   conv3_biases, conv4_weights,
-                                   conv4_biases, fc1_weights, fc1_biases,
-                                   fcj_weights, fcj_biases, sess)
-    print('Training Error: %.1f%%' % train_error)
-    validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-                                        conv1_biases, conv2_weights,
-                                        conv2_biases, conv3_weights,
-                                        conv3_biases, conv4_weights,
-                                        conv4_biases, fc1_weights,
-                                        fc1_biases, fcj_weights, fcj_biases,
-                                        sess)
-    print('Validation Error: %.1f%%' % validation_error)
+    logger.add_graph(sess.graph)
+    # train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
+    #                                conv1_biases, conv2_weights,
+    #                                conv2_biases, conv3_weights,
+    #                                conv3_biases, conv4_weights,
+    #                                conv4_biases, fc1_weights, fc1_biases,
+    #                                fcj_weights, fcj_biases, sess)
+    # print('Training Error: %.1f%%' % train_error)
+    # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
+    #                                     conv1_biases, conv2_weights,
+    #                                     conv2_biases, conv3_weights,
+    #                                     conv3_biases, conv4_weights,
+    #                                     conv4_biases, fc1_weights,
+    #                                     fc1_biases, fcj_weights, fcj_biases,
+    #                                     sess)
+    # print('Validation Error: %.1f%%' % validation_error)
 
 
 def training_test():
@@ -279,7 +278,7 @@ def training_test():
   num_pairs = 1000
   tset1, tset2, tlabels = dp.generate_normalized_data(int(0.6 * num_pairs))
   vset1, vset2, vlabels = dp.generate_normalized_data(int(0.2 * num_pairs))
-  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, epochs)
+  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
 
 if __name__ == "__main__":
   training_test()
