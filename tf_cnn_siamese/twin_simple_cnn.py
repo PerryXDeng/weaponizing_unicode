@@ -48,7 +48,7 @@ def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
   # Reshape the feature map cuboid into a matrix for fc layers
   features_shape = relu.get_shape().as_list()
   features = tf.reshape(
-    pool,
+    relu,
     [features_shape[0], features_shape[1] * features_shape[2] * features_shape[3]])
 
   # last fc_weights determine output dimensions
