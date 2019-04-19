@@ -1,5 +1,6 @@
 import tf_cnn_siamese.configurations as conf
 import tf_cnn_siamese.data_preparation as dp
+import tf_mnist.generate_datasets as tfdata
 import tensorflow as tf
 import numpy as np
 import time
@@ -121,8 +122,9 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
       staircase=True)
   # accumulation = momentum * accumulation + gradient
   # every epoch: variable -= learning_rate * accumulation
-  trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
-      .minimize(loss, global_step=batch)
+  # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
+    #  .minimize(loss, global_step=batch)
+  trainer = tf.train.AdamOptimizer().minimize(loss, global_step=batch)
   return trainer, loss, learning_rate
 
 
@@ -273,12 +275,18 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
     # print('Validation Error: %.1f%%' % validation_error)
 
 
-def training_test():
-  epochs = 1
+def random_training_test():
   num_pairs = 1000
   tset1, tset2, tlabels = dp.generate_normalized_data(int(0.6 * num_pairs))
   vset1, vset2, vlabels = dp.generate_normalized_data(int(0.2 * num_pairs))
   run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
 
+
+def mnist_training_test():
+  tset1, tset2, tlabels, vset1, vset2, vlabels = tfdata.compile_datasets()
+  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
+
+
 if __name__ == "__main__":
-  training_test()
+  mnist_training_test()
+
