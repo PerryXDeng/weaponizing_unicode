@@ -4,6 +4,7 @@ import random
 
 
 def create_pairs(x, digit_indices):
+    random.seed(0)
     num_classes = 10
     pairs = []
     labels = []
