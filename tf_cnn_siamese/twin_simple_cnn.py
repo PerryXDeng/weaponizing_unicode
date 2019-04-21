@@ -120,24 +120,48 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
       batch_total,
       conf.DECAY_RATE,                # Decay rate.
       staircase=True)
+  # vanilla momentum optimizer
   # accumulation = momentum * accumulation + gradient
   # every epoch: variable -= learning_rate * accumulation
   # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
     #  .minimize(loss, global_step=batch)
+
+  # adaptive momentum estimation optimizer
+  # default params
+  #     learning_rate=0.001,
+  #     beta1=0.9,
+  #     beta2=0.999,
+  #     epsilon=1e-08,
+  #     use_locking=False,
+  #     name='Adam'
   trainer = tf.train.AdamOptimizer().minimize(loss, global_step=batch)
   return trainer, loss, learning_rate
 
 
-def error_rate(predictions, labels):
-  # might be totally incorrect here
-  return 1 - (np.sum(np.argmax(predictions, 1) == labels)
-              / predictions.shape[0])
+def calc_stats(output, labels):
+  total = output.shape[0]
+  positive_predictions_indices = output > conf.THRESHOLD
+  negative_predictions_indices = output < conf.THRESHOLD
+  positive_labels_indices = np.where(labels == 1)[0]
+  negative_labels_indices = np.where(labels == 0)[0]
+
+  output[positive_predictions_indices] = 1
+  output[negative_predictions_indices] = 0
+
+  num_correct = np.sum(output == labels)
+  num_false_positives = np.count_nonzero(output[negative_labels_indices])
+  num_false_negatives = np.count_nonzero(output[positive_labels_indices] == 0)
+  num_true_positives = positive_predictions_indices.shape[0] - num_false_positives
+  num_true_negatives = negative_predictions_indices.shape[0] - num_false_negatives
+
+  return np.asarray((total, num_correct, num_true_positives, num_true_negatives,
+                    num_false_positives, num_false_negatives))
 
 
-def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
-                     conv2_weights, conv2_biases, conv3_weights, conv3_biases,
-                     conv4_weights, conv4_biases, fc1_weights, fc1_biases,
-                     fcj_weights, fcj_biases, session):
+def batch_validate(set_1, set_2, labels, conv1_weights, conv1_biases,
+                   conv2_weights, conv2_biases, conv3_weights, conv3_biases,
+                   conv4_weights, conv4_biases, fc1_weights, fc1_biases,
+                   fcj_weights, fcj_biases, session):
   x_1, x_2, _ = dp.inputs_placeholders()
   model = construct_full_model(x_1, x_2, conv1_weights, conv1_biases,
                                conv2_weights, conv2_biases, conv3_weights,
@@ -146,23 +170,40 @@ def batch_error_rate(set_1, set_2, labels, conv1_weights, conv1_biases,
   size = set_1.shape[0]
   if size < conf.BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
-  predictions = np.ndarray(shape=size, dtype=np.float32)
+  stats = np.zeros(6)
   for begin in range(0, size, conf.BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
       s1 = set_1[begin:end, ...]
       s2 = set_2[begin:end, ...]
-      predictions[begin:end] = session.run(fetches=model,
-                                           feed_dict={
-                                           x_1: s1,
-                                           x_2: s2})
+      stats += calc_stats(session.run(model, feed_dict={x_1: s1,x_2: s2}),
+                          labels[begin:end])
     else:
-      batch_predictions = session.run(fetches=model,
+      batch_predictions = session.run(model,
                                       feed_dict={
                                       x_1: set_1[-conf.BATCH_SIZE:, ...],
                                       x_2: set_2[-conf.BATCH_SIZE:, ...]})
-      predictions[begin:] = batch_predictions[begin - size:, :]
-  return error_rate(predictions, labels)
+      stats += calc_stats(batch_predictions[begin - size:, :], labels[begin:])
+  # stats: total, num_correct, num_true_positives, num_true_negatives,
+  #        num_false_positives, num_false_negatives
+  accuracy = stats[1] / stats[0]
+
+  # use precision and recall for the "positive" that is underrepresented
+  # and important to detect
+
+  # precision, proportion of correctly detected positive values
+  # the fewer actual negatives misclassified, the closer to 1
+  # affected by skewed data
+  precision = stats[2] / stats[2] + stats[4] # true positives / total positives
+
+  # coverage of actual positives, true positive rate
+  # the fewer actual positives misclassified, the closer to 1
+  # affected by skewed data
+  recall = stats[2] / stats[2] + stats[5] # true positives / actual positives
+
+  f1 = 2 * (precision*recall) / (precision + recall)
+
+  return accuracy, precision, recall, f1
 
 
 def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
@@ -222,6 +263,8 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
     data_size = tset1.shape[0]
     total = int(epochs * data_size)
     num_steps = total // conf.BATCH_SIZE
+    steps_per_epoch = data_size / conf.BATCH_SIZE
+    validation_interval = int(conf.EPOCHS_PER_VALIDATION * steps_per_epoch)
     for step in range(num_steps):
       # offset of the current minibatch
       offset = (step * conf.BATCH_SIZE) % (data_size - conf.BATCH_SIZE)
@@ -233,46 +276,64 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
       # runs the optimizer every iteration
       sess.run(optimizer, feed_dict=feed_dict)
       # prints loss and validation error when evalidating intermittently
-      if step % conf.VALIDATION_INTERVAL == 0:
+      if step % validation_interval == 0:
         elapsed_time = time.time() - start_time
-        start_time = time.time()
-        current_epoch = float(step) * conf.BATCH_SIZE / data_size
-        # train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
-        #                                conv1_biases, conv2_weights,
-        #                                conv2_biases, conv3_weights,
-        #                                conv3_biases, conv4_weights,
-        #                                conv4_biases, fc1_weights, fc1_biases,
-        #                                fcj_weights, fcj_biases, sess)
-        # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-        #                                     conv1_biases, conv2_weights,
-        #                                     conv2_biases, conv3_weights,
-        #                                     conv3_biases, conv4_weights,
-        #                                     conv4_biases, fc1_weights,
-        #                                     fc1_biases, fcj_weights, fcj_biases,
-        #                                     sess)
+        current_epoch = float(step) / steps_per_epoch
+        t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
+                                                 ty, conv1_weights, conv1_biases,
+                                                 conv2_weights, conv2_biases,
+                                                 conv3_weights, conv3_biases,
+                                                 conv4_weights, conv4_biases,
+                                                 fc1_weights, fc1_biases,
+                                                 fcj_weights, fcj_biases, sess)
+        v_accuracy, v_precision, v_recall, v_f1 = batch_validate(tset1, tset2,
+                                                 ty, conv1_weights, conv1_biases,
+                                                 conv2_weights, conv2_biases,
+                                                 conv3_weights, conv3_biases,
+                                                 conv4_weights, conv4_biases,
+                                                 fc1_weights, fc1_biases,
+                                                 fcj_weights, fcj_biases, sess)
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
         loss,learning_rate = sess.run([l,lr], feed_dict=feed_dict)
         print('Minibatch Loss: %.3f, learning rate: %.6f' % (loss, learning_rate))
-        # print('Training Error: %.1f%%' % train_error)
-        # print('Validation Error: %.1f%%' % validation_error)
+        print('Training Accuracy: %.3f' % t_accuracy)
+        # print('Training F1: %.1f' % t_f1)
+        print('Validation Accuracy: %.3f' % v_accuracy)
+        # print('Validation F1: %.1f' % v_f1)
         sys.stdout.flush()
     logger.add_graph(sess.graph)
-    # train_error = batch_error_rate(tset1, tset2, ty, conv1_weights,
-    #                                conv1_biases, conv2_weights,
-    #                                conv2_biases, conv3_weights,
-    #                                conv3_biases, conv4_weights,
-    #                                conv4_biases, fc1_weights, fc1_biases,
-    #                                fcj_weights, fcj_biases, sess)
-    # print('Training Error: %.1f%%' % train_error)
-    # validation_error = batch_error_rate(vset1, vset2, vy, conv1_weights,
-    #                                     conv1_biases, conv2_weights,
-    #                                     conv2_biases, conv3_weights,
-    #                                     conv3_biases, conv4_weights,
-    #                                     conv4_biases, fc1_weights,
-    #                                     fc1_biases, fcj_weights, fcj_biases,
-    #                                     sess)
-    # print('Validation Error: %.1f%%' % validation_error)
+    t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
+                                                             ty, conv1_weights,
+                                                             conv1_biases,
+                                                             conv2_weights,
+                                                             conv2_biases,
+                                                             conv3_weights,
+                                                             conv3_biases,
+                                                             conv4_weights,
+                                                             conv4_biases,
+                                                             fc1_weights,
+                                                             fc1_biases,
+                                                             fcj_weights,
+                                                             fcj_biases, sess)
+    v_accuracy, v_precision, v_recall, v_f1 = batch_validate(tset1, tset2,
+                                                             ty, conv1_weights,
+                                                             conv1_biases,
+                                                             conv2_weights,
+                                                             conv2_biases,
+                                                             conv3_weights,
+                                                             conv3_biases,
+                                                             conv4_weights,
+                                                             conv4_biases,
+                                                             fc1_weights,
+                                                             fc1_biases,
+                                                             fcj_weights,
+                                                             fcj_biases, sess)
+    print('Training Finished')
+    print('Training Accuracy: %.1f%%' % t_accuracy)
+    print('Training F1: %.1f%%' % t_f1)
+    print('Validation Accuracy: %.1f%%' % v_accuracy)
+    print('Validation F1: %.1f%%' % v_f1)
 
 
 def random_training_test():
@@ -283,10 +344,9 @@ def random_training_test():
 
 
 def mnist_training_test():
-  tset1, tset2, tlabels, vset1, vset2, vlabels = tfdata.compile_datasets()
+  tset1, tset2, tlabels, vset1, vset2, vlabels = tfdata.compile_transformed_float32_datasets()
   run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
 
 
 if __name__ == "__main__":
   mnist_training_test()
-
