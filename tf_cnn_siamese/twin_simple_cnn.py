@@ -293,10 +293,11 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                                  conv4_weights, conv4_biases,
                                                  fc1_weights, fc1_biases,
                                                  fcj_weights, fcj_biases, sess)
+        print()
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
         loss,learning_rate = sess.run([l,lr], feed_dict=feed_dict)
-        print('Minibatch Loss: %.3f, learning rate: %.6f' % (loss, learning_rate))
+        print('Minibatch Loss: %.3f, learning rate: %.10f' % (loss, learning_rate))
         print('Training Accuracy: %.3f' % t_accuracy)
         # print('Training F1: %.1f' % t_f1)
         print('Validation Accuracy: %.3f' % v_accuracy)
@@ -329,11 +330,12 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                                              fc1_biases,
                                                              fcj_weights,
                                                              fcj_biases, sess)
+    print()
     print('Training Finished')
-    print('Training Accuracy: %.1f%%' % t_accuracy)
-    print('Training F1: %.1f%%' % t_f1)
-    print('Validation Accuracy: %.1f%%' % v_accuracy)
-    print('Validation F1: %.1f%%' % v_f1)
+    print('Training Accuracy: %.3f' % t_accuracy)
+    # print('Training F1: %.1f' % t_f1)
+    print('Validation Accuracy: %.3f' % v_accuracy)
+    # print('Validation F1: %.1f' % v_f1)
 
 
 def random_training_test():

@@ -44,10 +44,26 @@ def compile_datasets():
     return x_1_train, x_2_train, y_train, x_1_test, x_2_test, y_test
 
 
-def main():
-    compile_datasets()
+def print_default_dtypes():
+    datasets = compile_datasets()
+    print(datasets[0].dtype) # training data is uint8
+    print(datasets[2].dtype) # labels are int64
+
+
+def compile_transformed_float32_datasets():
+    x_1_train, x_2_train, y_train, x_1_test, x_2_test, y_test = compile_datasets()
+    x_1_train = x_1_train.astype(np.float32)
+    x_2_train = x_2_train.astype(np.float32)
+    y_train = y_train.astype(np.float32)
+    x_1_test = x_1_test.astype(np.float32)
+    x_2_test = x_2_test.astype(np.float32)
+    y_test = y_test.astype(np.float32)
+    x_1_train = (x_1_train - 255 / 2) / 255
+    x_2_train = (x_2_train - 255 / 2) / 255
+    x_1_test = (x_1_test - 255 / 2) / 255
+    x_2_test = (x_2_test - 255 / 2) / 255
+    return x_1_train, x_2_train, y_train, x_1_test, x_2_test, y_test
 
 
 if __name__ == "__main__":
-    main()
-
+    print_default_dtypes()
