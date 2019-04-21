@@ -1,4 +1,5 @@
 import tf_cnn_siamese.configurations as conf
+import tf_mnist.generate_datasets as tfdata
 import tensorflow as tf
 import numpy as np
 
@@ -17,11 +18,18 @@ def generate_normalized_data(num_pairs):
 
 
 def inputs_placeholders():
-  x_1 = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE,
-                                          conf.IMG_X, conf.IMG_Y, 1), name="x_1")
-  x_2 = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE,
-                                          conf.IMG_X, conf.IMG_Y, 1), name="x_2")
+  x_1 = tf.placeholder(conf.DTYPE, shape=conf.INPUT_SHAPE, name="x_1")
+  x_2 = tf.placeholder(conf.DTYPE, shape=conf.INPUT_SHAPE, name="x_2")
   labels = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE, 1), name="labels")
   return x_1, x_2, labels
 
 
+def get_mnist_dataset():
+  tset1, tset2, tlabels, vset1, vset2, vlabels = tfdata.compile_transformed_float32_datasets()
+  if conf.DATA_FORMAT == 'NCHW':
+    transform = [0, 3, 1, 2]
+    tset1 = np.transpose(tset1, transform)
+    tset2 = np.transpose(tset2, transform)
+    vset1 = np.transpose(vset1, transform)
+    vset2 = np.transpose(vset2, transform)
+  return tset1, tset2, tlabels, vset1, vset2, vlabels

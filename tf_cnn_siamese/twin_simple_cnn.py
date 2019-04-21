@@ -1,6 +1,5 @@
 import tf_cnn_siamese.configurations as conf
 import tf_cnn_siamese.data_preparation as dp
-import tf_mnist.generate_datasets as tfdata
 import tensorflow as tf
 import numpy as np
 import time
@@ -10,41 +9,49 @@ import sys
 def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
                conv3_weights, conv3_biases, conv4_weights, conv4_biases,
                fc1_weights, fc1_biases, dropout = False):
+  pool_ksize = ([1, 2, 2, 1] if conf.DATA_FORMAT == 'NHWC' else [1, 1, 2, 2])
   conv = tf.nn.conv2d(x,
                       conv1_weights,
                       strides=[1, 1, 1, 1],
-                      padding='SAME')
-  relu = tf.nn.relu(tf.nn.bias_add(conv, conv1_biases))
+                      padding='SAME',
+                      data_format=conf.DATA_FORMAT)
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv1_biases, data_format=conf.DATA_FORMAT))
   pool = tf.nn.max_pool(relu,
-                        ksize=[1, 2, 2, 1],
-                        strides=[1, 2, 2, 1],
-                        padding='VALID')
+                        ksize=pool_ksize,
+                        strides=pool_ksize,
+                        padding='VALID',
+                        data_format=conf.DATA_FORMAT)
 
   conv = tf.nn.conv2d(pool,
                       conv2_weights,
                       strides=[1, 1, 1, 1],
-                      padding='SAME')
-  relu = tf.nn.relu(tf.nn.bias_add(conv, conv2_biases))
+                      padding='SAME',
+                      data_format=conf.DATA_FORMAT)
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv2_biases, data_format=conf.DATA_FORMAT))
   pool = tf.nn.max_pool(relu,
-                        ksize=[1, 2, 2, 1],
-                        strides=[1, 2, 2, 1],
-                        padding='VALID')
+                        ksize=pool_ksize,
+                        strides=pool_ksize,
+                        padding='VALID',
+                        data_format=conf.DATA_FORMAT)
 
   conv = tf.nn.conv2d(pool,
                       conv3_weights,
                       strides=[1, 1, 1, 1],
-                      padding='SAME')
-  relu = tf.nn.relu(tf.nn.bias_add(conv, conv3_biases))
+                      padding='SAME',
+                      data_format=conf.DATA_FORMAT)
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv3_biases, data_format=conf.DATA_FORMAT))
   pool = tf.nn.max_pool(relu,
-                        ksize=[1, 2, 2, 1],
-                        strides=[1, 2, 2, 1],
-                        padding='VALID')
+                        ksize=pool_ksize,
+                        strides=pool_ksize,
+                        padding='VALID',
+                        data_format=conf.DATA_FORMAT)
   # last conv layer has no pooling
   conv = tf.nn.conv2d(pool,
                       conv4_weights,
                       strides=[1, 1, 1, 1],
-                      padding='SAME')
-  relu = tf.nn.relu(tf.nn.bias_add(conv, conv4_biases))
+                      padding='SAME',
+                      data_format=conf.DATA_FORMAT)
+  relu = tf.nn.relu(tf.nn.bias_add(conv, conv4_biases, data_format=conf.DATA_FORMAT))
 
   # Reshape the feature map cuboid into a matrix for fc layers
   features_shape = relu.get_shape().as_list()
@@ -211,7 +218,6 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   # input nodes
   x_1, x_2, labels = dp.inputs_placeholders()
   # twin portion variables
-  # 3x3 filter, depth 64.
   conv1_weights = tf.Variable(tf.truncated_normal([3, 3, 1, 64],
                               stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
                               name="twin_conv1_weights")
@@ -255,7 +261,6 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                              fc1_biases, fcj_weights, fcj_biases
                                              , dropout, lagrange)
   # creates session
-  start_time = time.time()
   with tf.Session() as sess:
     tf.global_variables_initializer().run()
     logger = tf.summary.FileWriter(conf.log_dir)
@@ -265,6 +270,9 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
     num_steps = total // conf.BATCH_SIZE
     steps_per_epoch = data_size / conf.BATCH_SIZE
     validation_interval = int(conf.EPOCHS_PER_VALIDATION * steps_per_epoch)
+    print("Training Started")
+    print("Data Format " + conf.DATA_FORMAT)
+    start_time = time.time()
     for step in range(num_steps):
       # offset of the current minibatch
       offset = (step * conf.BATCH_SIZE) % (data_size - conf.BATCH_SIZE)
@@ -346,7 +354,7 @@ def random_training_test():
 
 
 def mnist_training_test():
-  tset1, tset2, tlabels, vset1, vset2, vlabels = tfdata.compile_transformed_float32_datasets()
+  tset1, tset2, tlabels, vset1, vset2, vlabels = dp.get_mnist_dataset()
   run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
 
 
