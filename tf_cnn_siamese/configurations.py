@@ -1,14 +1,18 @@
 import tensorflow as tf
 
-# for training usage, exponential decay with momentum gradients
-DROP_RATE = 0.5
+# for training usage
 BATCH_SIZE = 48 # about 3.1 G of float32 per 64 sized batch
-LAMBDA = 5e-4
+EPOCHS_PER_VALIDATION = 1
+NUM_EPOCHS = 5
+# regularization
+DROP = False
+L2 = True
+DROP_RATE = 0.2
+LAMBDA = 0.005
+# for customizing momentum optimizer
 BASE_LEARNING_RATE = 0.001
 DECAY_RATE = 0.95
 MOMENTUM = 0.9
-EPOCHS_PER_VALIDATION = 1
-NUM_EPOCHS = 5
 
 # data type used in matrices
 DTYPE = tf.float32

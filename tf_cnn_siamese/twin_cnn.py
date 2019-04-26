@@ -121,16 +121,16 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
   # setting up the optimization
   batch = tf.Variable(0, dtype=conf.DTYPE)
   batch_total = labels.shape[0]
+  # vanilla momentum optimizer
+  # accumulation = momentum * accumulation + gradient
+  # every epoch: variable -= learning_rate * accumulation 
   learning_rate = tf.train.exponential_decay(
       conf.BASE_LEARNING_RATE,
       batch * conf.BATCH_SIZE,  # Current index into the dataset.
       batch_total,
       conf.DECAY_RATE,                # Decay rate.
       staircase=True)
-  # vanilla momentum optimizer
-  # accumulation = momentum * accumulation + gradient
-  # every epoch: variable -= learning_rate * accumulation
-  # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
+ # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
     #  .minimize(loss, global_step=batch)
 
   # adaptive momentum estimation optimizer
@@ -142,7 +142,7 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
   #     use_locking=False,
   #     name='Adam'
   trainer = tf.train.AdamOptimizer().minimize(loss, global_step=batch)
-  return trainer, loss, learning_rate
+  return trainer, loss
 
 
 def calc_stats(output, labels):
@@ -158,8 +158,8 @@ def calc_stats(output, labels):
   num_correct = np.sum(output == labels)
   num_false_positives = np.count_nonzero(output[negative_labels_indices])
   num_false_negatives = np.count_nonzero(output[positive_labels_indices] == 0)
-  num_true_positives = positive_predictions_indices.shape[0] - num_false_positives
-  num_true_negatives = negative_predictions_indices.shape[0] - num_false_negatives
+  num_true_positives = np.count_nonzero(positive_predictions_indices) - num_false_positives
+  num_true_negatives = np.count_nonzero(negative_predictions_indices) - num_false_negatives
 
   return np.asarray((total, num_correct, num_true_positives, num_true_negatives,
                     num_false_positives, num_false_negatives))
@@ -201,12 +201,12 @@ def batch_validate(set_1, set_2, labels, conv1_weights, conv1_biases,
   # precision, proportion of correctly detected positive values
   # the fewer actual negatives misclassified, the closer to 1
   # affected by skewed data
-  precision = stats[2] / stats[2] + stats[4] # true positives / total positives
+  precision = stats[2] / (stats[2] + stats[4]) # true positives / total positives
 
   # coverage of actual positives, true positive rate
   # the fewer actual positives misclassified, the closer to 1
   # affected by skewed data
-  recall = stats[2] / stats[2] + stats[5] # true positives / actual positives
+  recall = stats[2] / (stats[2] + stats[5]) # true positives / actual positives
 
   f1 = 2 * (precision*recall) / (precision + recall)
 
@@ -253,7 +253,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                             name="joined_fc_weights")
   fcj_biases = tf.Variable(tf.constant(0.1, shape=[1], dtype=conf.DTYPE),
                            name="joined_fc_biases")
-  optimizer, l, lr = construct_loss_optimizer(x_1, x_2, labels, conv1_weights,
+  optimizer, l = construct_loss_optimizer(x_1, x_2, labels, conv1_weights,
                                              conv1_biases, conv2_weights,
                                              conv2_biases, conv3_weights,
                                              conv3_biases, conv4_weights,
@@ -304,12 +304,16 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         print()
         print('Step %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
-        loss,learning_rate = sess.run([l,lr], feed_dict=feed_dict)
-        print('Minibatch Loss: %.3f, learning rate: %.10f' % (loss, learning_rate))
+        loss = sess.run(l, feed_dict=feed_dict)
+        print('Minibatch Loss: %.3f' % (float(loss)))
         print('Training Accuracy: %.3f' % t_accuracy)
-        # print('Training F1: %.1f' % t_f1)
+        print('Training Recall: %.1f' % t_recall)
+        print('Training Precision: %.1f' % t_precision)
+        print('Training F1: %.1f' % t_f1)
         print('Validation Accuracy: %.3f' % v_accuracy)
-        # print('Validation F1: %.1f' % v_f1)
+        print('Validation Recall: %.3f' % v_recall)
+        print('Validation Precision: %.3f' % v_precision)
+        print('Validation F1: %.1f' % v_f1)
         sys.stdout.flush()
     logger.add_graph(sess.graph)
     t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
@@ -341,9 +345,13 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
     print()
     print('Training Finished')
     print('Training Accuracy: %.3f' % t_accuracy)
-    # print('Training F1: %.1f' % t_f1)
+    print('Training Recall: %.1f' % t_recall)
+    print('Training Precision: %.1f' % t_precision)
+    print('Training F1: %.1f' % t_f1)
     print('Validation Accuracy: %.3f' % v_accuracy)
-    # print('Validation F1: %.1f' % v_f1)
+    print('Validation Recall: %.3f' % v_recall)
+    print('Validation Precision: %.3f' % v_precision)
+    print('Validation F1: %.1f' % v_f1)
 
 
 def random_training_test():
@@ -355,7 +363,8 @@ def random_training_test():
 
 def mnist_training_test():
   tset1, tset2, tlabels, vset1, vset2, vlabels = dp.get_mnist_dataset()
-  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
+  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS,
+                       conf.DROP, conf.L2)
 
 
 if __name__ == "__main__":
