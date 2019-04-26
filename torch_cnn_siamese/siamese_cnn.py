@@ -6,20 +6,20 @@ import torch.onnx as onnx
 import torchvision
 import torchvision.transforms as transforms
 import numpy as np
-from tf_cnn_siamese.data_preparation import get_mnist_dataset
-from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, DECAY_RATE
+from torch_cnn_siamese.generate_datasets import get_mnist_dataset
+from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, DECAY_RATE, THRESHOLD
 
+# MNIST One Shot dataset
+tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
 
-# MNIST Datasets
-trainset = torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=transforms.ToTensor())
-testset = torchvision.datasets.MNIST(root="./data", train=False, download=True, transform=transforms.ToTensor())
-
-# Loaders for Datasets
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
-testloader = torch.utils.data.DataLoader(testset, batch_size=64)
-
-# MNIST One Shot Dataset
-# tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
+# Uncomment this to run on GPU
+if torch.cuda.is_available():
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    torch.cuda.set_device(0)
+    gpu = True
+else:
+    torch.set_default_tensor_type('torch.FloatTensor')
+    gpu = False
 
 
 def conv_layer(in_channels, out_channels, kernel, pool=True):
@@ -83,7 +83,14 @@ class Net(nn.Module):
         return torch.sigmoid(result)
 
 
-net = Net()
+def init_weights(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.xavier_normal_(m.weight)
+
+
+net = Net().cuda()
+# net.apply(init_weights)
+
 cross = nn.BCELoss()
 optimizer = optim.Adam(net.parameters(), lr=.001, weight_decay=DECAY_RATE)
 
@@ -94,100 +101,118 @@ def train(num_epoch):
     :param num_epoch: number of times to loop through the dataset
     :return: None
     """
-    data_size = testloader.shape[0]
+    data_size = tset1.shape[0]
     total = int(num_epoch * data_size)
     num_steps = total // BATCH_SIZE
     steps_per_epoch = data_size / BATCH_SIZE
     validation_interval = int(EPOCHS_PER_VALIDATION * steps_per_epoch)
-    print("Training Started")
+    print("Training Started...")
 
     start_time = time.time()
-    for epoch in range(num_epoch):
-        for step in range(num_steps):
-            # offset of the current minibatch
-            offset = (step * BATCH_SIZE) % (data_size - BATCH_SIZE)
-            batch_x1 = tset1[offset:(offset + BATCH_SIZE), ...]
-            batch_x2 = tset2[offset:(offset + BATCH_SIZE), ...]
-            batch_labels = tlabels[offset:(offset + BATCH_SIZE)]
+    for step in range(num_steps):
+        # offset of the current minibatch
+        offset = (step * BATCH_SIZE) % (data_size - BATCH_SIZE)
+        batch_x1 = tset1[offset:(offset + BATCH_SIZE), ...]
+        batch_x2 = tset2[offset:(offset + BATCH_SIZE), ...]
+        batch_labels = tlabels[offset:(offset + BATCH_SIZE)]
 
-            # Zero grad
-            optimizer.zero_grad()
+        # Zero grad
+        optimizer.zero_grad()
 
-            # forward, backward, optimize
-            output = net((batch_x1, batch_x2))
-            loss = cross(output, batch_labels)
-            loss.backward()
-            optimizer.step()
+        # convert to gpu
+        if gpu:
+            batch_x1 = batch_x1.to(0)
+            batch_x2 = batch_x2.to(0)
+            batch_labels = batch_labels.to(0)
 
-            # print results
-            if step % validation_interval == 0:
-                for param_group in optimizer.param_groups:
-                    lr = param_group['lr']
-                print('Step %d (epoch %.2f), %.4f s' % (step, epoch, time.time() - start_time))
-                print('Minibatch Loss: %.3f, learning rate: %.10f' % (loss, lr))
-                print('Training Accuracy: %.3f' % train_net_accuracy())
-                print('Validation Accuracy: %.3f' % validate_set_accuracy())
+        # forward, backward, optimize
+        output = net((batch_x1, batch_x2))
+        loss = cross(output, batch_labels)
+        loss.backward()
+        optimizer.step()
+
+        # print results
+        if step % validation_interval == 0:
+            print(output)
+            print(batch_labels)
+            t_accuracy, t_precision, t_recall, t_f1 = train_net_accuracy(tset1, tset2, tlabels)
+            v_accuracy, v_precision, v_recall, v_f1 = train_net_accuracy(vset1, vset2, vlabels)
+
+            for param_group in optimizer.param_groups:
+                lr = param_group['lr']
+            print('Step %d (epoch %.2f), %.4f s' % (step, float(step) / steps_per_epoch, time.time() - start_time))
+            print('Minibatch Loss: %.3f, learning rate: %.5f' % (loss, lr))
+            print('Training Accuracy: %.3f' % t_accuracy)
+            print('Validation Accuracy: %.3f' % v_accuracy)
+            print("")
 
     print("Finished training in %.4f s" % (time.time() - start_time))
 
+    # Saving model
+    torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))),), "siamese_cnn.onnx")
+    torch.save(net, "siamese_cnn.pth")
 
-def train_net_accuracy():
+
+def train_net_accuracy(set1, set2, labels):
     """
     Function to handle testing the network for accuracy on the training set
     :return: None
     """
-    total = tset1.shape[0]
+    total = set1.shape[0]
     steps = total // BATCH_SIZE
 
-    correct = 0
+    stats = np.zeros(6)
     with torch.no_grad():
         for step in range(steps):
             # offset of the current minibatch
             offset = (step * BATCH_SIZE) % (total - BATCH_SIZE)
-            batch_x1 = tset1[offset:(offset + BATCH_SIZE), ...]
-            batch_x2 = tset2[offset:(offset + BATCH_SIZE), ...]
-            batch_labels = tlabels[offset:(offset + BATCH_SIZE)]
+            batch_x1 = set1[offset:(offset + BATCH_SIZE), ...]
+            batch_x2 = set2[offset:(offset + BATCH_SIZE), ...]
+            batch_labels = labels[offset:(offset + BATCH_SIZE)]
+
+            # convert to gpu
+            if gpu:
+                batch_x1 = batch_x1.to(0)
+                batch_x2 = batch_x2.to(0)
+                batch_labels = batch_labels.to(0)
 
             output = net((batch_x1, batch_x2))
-            print(output)
-            correct += np.sum(output == batch_labels)
+            stats += calc_stats(output.cpu().detach().numpy(),
+                                batch_labels.cpu().detach().numpy())
 
-    return 100 * correct / total
+    accuracy = stats[1] / stats[0]
+    precision = stats[2] / stats[2] + stats[4]  # true positives / total positives
+    recall = stats[2] / stats[2] + stats[5]  # true positives / actual positives
+    f1 = 2 * (precision * recall) / (precision + recall)
+
+    return accuracy, precision, recall, f1
 
 
-def validate_set_accuracy():
+def calc_stats(output, labels):
     """
-        Function to handle testing the network for accuracy on the test set
-        The validate images are ones the network hasn't seen
-        :return: None
-        """
-    total = vset1.shape[0]
-    steps = total // BATCH_SIZE
+    Calculates statistics on the current network, including num correct and a confusion matrix
+    :param output: output from the network
+    :param labels: labels for true class
+    :return: np array of statistics
+    """
+    total = output.shape[0]
+    positive_predictions_indices = output > THRESHOLD
+    negative_predictions_indices = output < THRESHOLD
+    positive_labels_indices = np.where(labels == 1)[0]
+    negative_labels_indices = np.where(labels == 0)[0]
 
-    correct = 0
-    with torch.no_grad():
-        for step in range(steps):
-            # offset of the current minibatch
-            offset = (step * BATCH_SIZE) % (total - BATCH_SIZE)
-            batch_x1 = vset1[offset:(offset + BATCH_SIZE), ...]
-            batch_x2 = vset2[offset:(offset + BATCH_SIZE), ...]
-            batch_labels = vlabels[offset:(offset + BATCH_SIZE)]
+    output[positive_predictions_indices] = 1
+    output[negative_predictions_indices] = 0
 
-            output = net((batch_x1, batch_x2))
-            print(output)
-            correct += np.sum(output == batch_labels)
+    num_correct = np.sum(output == labels)
+    num_false_positives = np.count_nonzero(output[negative_labels_indices])
+    num_false_negatives = np.count_nonzero(output[positive_labels_indices] == 0)
+    num_true_positives = positive_predictions_indices.shape[0] - num_false_positives
+    num_true_negatives = negative_predictions_indices.shape[0] - num_false_negatives
 
-    return 100 * correct / total
+    return np.asarray((total, num_correct, num_true_positives, num_true_negatives,
+                       num_false_positives, num_false_negatives))
 
 
-train_net_accuracy()
-validate_set_accuracy()
-
-train(5)
-
-train_net_accuracy()
-validate_set_accuracy()
-
-# Model Saving for export
-# torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))), ), "siamese_cnn.onnx")
-# torch.save(net, "siamese_cnn.pth")
+if __name__ == '__main__':
+    train(5)
