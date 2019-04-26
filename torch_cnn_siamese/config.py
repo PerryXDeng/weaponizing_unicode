@@ -1,3 +1,5 @@
+import tensorflow as tf
+
 # for training usage, exponential decay with momentum gradients
 DROP_RATE = 0.5
 BATCH_SIZE = 48 # about 3.1 G of float32 per 64 sized batch

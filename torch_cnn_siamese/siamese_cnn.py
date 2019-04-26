@@ -10,8 +10,16 @@ from tf_cnn_siamese.data_preparation import get_mnist_dataset
 from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, DECAY_RATE
 
 
+# MNIST Datasets
+trainset = torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=transforms.ToTensor())
+testset = torchvision.datasets.MNIST(root="./data", train=False, download=True, transform=transforms.ToTensor())
+
+# Loaders for Datasets
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+testloader = torch.utils.data.DataLoader(testset, batch_size=64)
+
 # MNIST One Shot Dataset
-tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
+# tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
 
 
 def conv_layer(in_channels, out_channels, kernel, pool=True):
@@ -86,7 +94,7 @@ def train(num_epoch):
     :param num_epoch: number of times to loop through the dataset
     :return: None
     """
-    data_size = tset1.shape[0]
+    data_size = testloader.shape[0]
     total = int(num_epoch * data_size)
     num_steps = total // BATCH_SIZE
     steps_per_epoch = data_size / BATCH_SIZE
