@@ -8,5 +8,9 @@ data transformation, and transfer learning.
 ## Current Progress
 Model is largely implemented, except for regularizations and hyperparameter
 optimization, which will wait until the actual unicode dataset is ready.
+## Todo
+Xavier initialization
+Regularization if needed
+hyperparameter optimization if needed
 ## Issues
 TPU incompatability. Incorrectly calculated F1 score.
