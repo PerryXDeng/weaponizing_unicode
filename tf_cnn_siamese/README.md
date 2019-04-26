@@ -9,8 +9,12 @@ data transformation, and transfer learning.
 Model is largely implemented, except for regularizations and hyperparameter
 optimization, which will wait until the actual unicode dataset is ready.
 ## Todo
-Xavier initialization
-Regularization if needed
+separate exporting of twin and joined network models
+
+xavier initialization
+
+regularization if needed
+
 hyperparameter optimization if needed
 ## Issues
 TPU incompatability. Incorrectly calculated F1 score.
