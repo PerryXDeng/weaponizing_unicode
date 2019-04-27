@@ -235,6 +235,8 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   saver = tf.train.Saver()
   with tf.Session() as sess: # automatic tear down of controlled execution
     tf.global_variables_initializer().run()
+    cuda_enabled = ('NCHW' == conf.DATA_FORMAT)
+    print("CUDA Enabled: " + str(cuda_enabled))
     if input("resume from previous session (y/n):") == "y":
       path = input("enter path:")
       saver.restore(sess, path)

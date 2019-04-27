@@ -19,7 +19,7 @@ MOMENTUM = 0.9
 DTYPE = tf.float32
 
 # dims for input
-DATA_FORMAT = ('NCHW' if tf.test.is_built_with_cuda() else 'NWHC')
+DATA_FORMAT = ('NCHW' if tf.test.is_built_with_cuda() else 'NHWC')
 IMG_X = 28
 IMG_Y = 28
 NUM_CHANNELS = 1
