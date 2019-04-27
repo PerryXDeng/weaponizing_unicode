@@ -234,6 +234,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   # creates session
   saver = tf.train.Saver()
   with tf.Session() as sess: # automatic tear down of controlled execution
+    print("\n")
     tf.global_variables_initializer().run()
     cuda_enabled = ('NCHW' == conf.DATA_FORMAT)
     print("CUDA Enabled: " + str(cuda_enabled))
@@ -278,8 +279,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                                  conv4_weights, conv4_biases,
                                                  fc1_weights, fc1_biases,
                                                  fcj_weights, fcj_biases, sess)
-        print()
-        print('Step %d (epoch %.2f), %.4f s'
+        print('\nStep %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
         loss = sess.run(l, feed_dict=feed_dict)
         print('Minibatch Loss: %.3f' % (float(loss)))
@@ -293,8 +293,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         print('Validation F1: %.3f' % v_f1)
         sys.stdout.flush()
     logger.add_graph(sess.graph)
-    print()
-    print('Training Finished')
+    print('\nTraining Finished')
     if input("Save Variables? (y/n): ") == "y":
       filename = datetime.datetime.now().strftime("GMT%m%d%H%M.ckpt")
       try:
@@ -309,7 +308,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
 
 
 def initialize_weights():
-  # initialize weights, decides architecture dimensions
+  # initialize weights, which decide architecture dimensions
   # twin network convolution and pooling variables
   conv1_weights = tf.Variable(tf.truncated_normal([3, 3, 1, 64],
                               stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
@@ -333,7 +332,7 @@ def initialize_weights():
                              name="twin_conv4_biases")
   # twin network fullly connected variables
   conv_features = 2304 # dims of output from the convlutional layers of twins
-  fc_features = conv_features # dims of output from the fc layer of twins
+  fc_features = 128 # dims of output from the fc layer of twins
   fc1_weights = tf.Variable(tf.truncated_normal([conv_features, fc_features],
                             stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
                             name="twin_fc_weights")
