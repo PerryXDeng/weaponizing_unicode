@@ -1,25 +1,30 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import time
-import torch.onnx as onnx
-import torchvision
-import torchvision.transforms as transforms
 import numpy as np
 from torch_cnn_siamese.generate_datasets import get_mnist_dataset
-from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, DECAY_RATE, THRESHOLD
+from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, THRESHOLD
+
+
+# Argument parsing for CMD
+parser = argparse.ArgumentParser(description="Hyper-parameters for network.")
+parser.add_argument('-b', '--batch', action='store', type=int, default=BATCH_SIZE)
+parser.add_argument('-g', '--gpu', action='store', type=bool, default=True)
+parser.add_argument('-e', '--epochs', action='store', type=int, default=5)
+parser.add_argument('-p', '--path', action='store', type=str, default=str(time.time()))
+args = parser.parse_args()
 
 # MNIST One Shot dataset
 tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
 
-# Uncomment this to run on GPU
-if torch.cuda.is_available():
+# GPU setting
+if torch.cuda.is_available() and args.gpu:
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     torch.cuda.set_device(0)
-    gpu = True
 else:
     torch.set_default_tensor_type('torch.FloatTensor')
-    gpu = False
 
 
 def conv_layer(in_channels, out_channels, kernel, pool=True):
@@ -29,6 +34,7 @@ def conv_layer(in_channels, out_channels, kernel, pool=True):
     :param in_channels: input number of filters for the layer
     :param out_channels: output number of filters for the layer
     :param kernel: size of each kernel
+    :param pool: whether maxpool layer is included
     :return: nn.Sequential of the layer
     """
     if pool:
@@ -61,6 +67,8 @@ class Net(nn.Module):
     def forward(self, params):
         """
         Siamese CNN model with layers of 2D Conv + ReLU combined with a MaxPool2D
+        Computes an element-wise square mean between the network outputs before putting them into a
+        FC layer
         :param params: input tuple to the network, 'genuine' and 'fake' images
         :return: output of the network
         """
@@ -92,7 +100,7 @@ net = Net().cuda()
 # net.apply(init_weights)
 
 cross = nn.BCELoss()
-optimizer = optim.Adam(net.parameters(), lr=.001, weight_decay=DECAY_RATE)
+optimizer = optim.Adam(net.parameters(), lr=.001)
 
 
 def train(num_epoch):
@@ -103,24 +111,24 @@ def train(num_epoch):
     """
     data_size = tset1.shape[0]
     total = int(num_epoch * data_size)
-    num_steps = total // BATCH_SIZE
-    steps_per_epoch = data_size / BATCH_SIZE
+    num_steps = total // args.batch
+    steps_per_epoch = data_size / args.batch
     validation_interval = int(EPOCHS_PER_VALIDATION * steps_per_epoch)
     print("Training Started...")
 
     start_time = time.time()
     for step in range(num_steps):
         # offset of the current minibatch
-        offset = (step * BATCH_SIZE) % (data_size - BATCH_SIZE)
-        batch_x1 = tset1[offset:(offset + BATCH_SIZE), ...]
-        batch_x2 = tset2[offset:(offset + BATCH_SIZE), ...]
-        batch_labels = tlabels[offset:(offset + BATCH_SIZE)]
+        offset = (step * args.batch) % (data_size - args.batch)
+        batch_x1 = tset1[offset:(offset + args.batch), ...]
+        batch_x2 = tset2[offset:(offset + args.batch), ...]
+        batch_labels = tlabels[offset:(offset + args.batch)]
 
         # Zero grad
         optimizer.zero_grad()
 
         # convert to gpu
-        if gpu:
+        if args.gpu:
             batch_x1 = batch_x1.to(0)
             batch_x2 = batch_x2.to(0)
             batch_labels = batch_labels.to(0)
@@ -133,24 +141,26 @@ def train(num_epoch):
 
         # print results
         if step % validation_interval == 0:
-            print(output)
-            print(batch_labels)
             t_accuracy, t_precision, t_recall, t_f1 = train_net_accuracy(tset1, tset2, tlabels)
             v_accuracy, v_precision, v_recall, v_f1 = train_net_accuracy(vset1, vset2, vlabels)
 
-            for param_group in optimizer.param_groups:
-                lr = param_group['lr']
             print('Step %d (epoch %.2f), %.4f s' % (step, float(step) / steps_per_epoch, time.time() - start_time))
-            print('Minibatch Loss: %.3f, learning rate: %.5f' % (loss, lr))
+            print('Minibatch Loss: %.3f' % (float(loss)))
             print('Training Accuracy: %.3f' % t_accuracy)
+            print('Training Recall: %.1f' % t_recall)
+            print('Training Precision: %.1f' % t_precision)
+            print('Training F1: %.1f' % t_f1)
             print('Validation Accuracy: %.3f' % v_accuracy)
+            print('Validation Recall: %.3f' % v_recall)
+            print('Validation Precision: %.3f' % v_precision)
+            print('Validation F1: %.1f' % v_f1)
             print("")
 
     print("Finished training in %.4f s" % (time.time() - start_time))
 
     # Saving model
-    torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))),), "siamese_cnn.onnx")
-    torch.save(net, "siamese_cnn.pth")
+    # torch.onnx.export(net, ((torch.randn((1, 1, 28, 28)), torch.randn((1, 1, 28, 28))),), "siamese_cnn.onnx")
+    torch.save(net, "checkpoints/siamese_cnn_{}.pth".format(args.path))
 
 
 def train_net_accuracy(set1, set2, labels):
@@ -159,19 +169,19 @@ def train_net_accuracy(set1, set2, labels):
     :return: None
     """
     total = set1.shape[0]
-    steps = total // BATCH_SIZE
+    steps = total // args.batch
 
     stats = np.zeros(6)
     with torch.no_grad():
         for step in range(steps):
             # offset of the current minibatch
-            offset = (step * BATCH_SIZE) % (total - BATCH_SIZE)
-            batch_x1 = set1[offset:(offset + BATCH_SIZE), ...]
-            batch_x2 = set2[offset:(offset + BATCH_SIZE), ...]
-            batch_labels = labels[offset:(offset + BATCH_SIZE)]
+            offset = (step * args.batch) % (total - args.batch)
+            batch_x1 = set1[offset:(offset + args.batch), ...]
+            batch_x2 = set2[offset:(offset + args.batch), ...]
+            batch_labels = labels[offset:(offset + args.batch)]
 
             # convert to gpu
-            if gpu:
+            if args.gpu:
                 batch_x1 = batch_x1.to(0)
                 batch_x2 = batch_x2.to(0)
                 batch_labels = batch_labels.to(0)
@@ -181,8 +191,8 @@ def train_net_accuracy(set1, set2, labels):
                                 batch_labels.cpu().detach().numpy())
 
     accuracy = stats[1] / stats[0]
-    precision = stats[2] / stats[2] + stats[4]  # true positives / total positives
-    recall = stats[2] / stats[2] + stats[5]  # true positives / actual positives
+    precision = stats[2] / (stats[2] + stats[4])  # true positives / total positives
+    recall = stats[2] / (stats[2] + stats[5])  # true positives / actual positives
     f1 = 2 * (precision * recall) / (precision + recall)
 
     return accuracy, precision, recall, f1
@@ -215,4 +225,4 @@ def calc_stats(output, labels):
 
 
 if __name__ == '__main__':
-    train(5)
+    train(args.epochs)
