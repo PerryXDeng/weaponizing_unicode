@@ -13,8 +13,6 @@ separate exporting of twin and joined network models
 
 xavier initialization
 
-regularization if needed
-
-hyperparameter optimization if needed
+adjusting hyperparameters for actual datasets
 ## Issues
-TPU incompatability. Incorrectly calculated F1 score.
+TPU incompatability.

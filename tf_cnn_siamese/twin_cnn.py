@@ -2,8 +2,10 @@ import tf_cnn_siamese.configurations as conf
 import tf_cnn_siamese.data_preparation as dp
 import tensorflow as tf
 import numpy as np
+import datetime
 import time
 import sys
+import os
 
 
 def single_cnn(x, conv1_weights, conv1_biases, conv2_weights, conv2_biases,
@@ -120,18 +122,19 @@ def construct_loss_optimizer(x_1, x_2, labels, conv1_weights, conv1_biases,
 
   # setting up the optimization
   batch = tf.Variable(0, dtype=conf.DTYPE)
-  batch_total = labels.shape[0]
+
   # vanilla momentum optimizer
   # accumulation = momentum * accumulation + gradient
-  # every epoch: variable -= learning_rate * accumulation 
-  learning_rate = tf.train.exponential_decay(
-      conf.BASE_LEARNING_RATE,
-      batch * conf.BATCH_SIZE,  # Current index into the dataset.
-      batch_total,
-      conf.DECAY_RATE,                # Decay rate.
-      staircase=True)
- # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
-    #  .minimize(loss, global_step=batch)
+  # every epoch: variable -= learning_rate * accumulation
+  # batch_total = labels.shape[0]
+  # learning_rate = tf.train.exponential_decay(
+  #     conf.BASE_LEARNING_RATE,
+  #     batch * conf.BATCH_SIZE,  # Current index into the dataset.
+  #     batch_total,
+  #     conf.DECAY_RATE,                # Decay rate.
+  #     staircase=True)
+  # trainer = tf.train.MomentumOptimizer(learning_rate, conf.MOMENTUM)\
+  #    .minimize(loss, global_step=batch)
 
   # adaptive momentum estimation optimizer
   # default params
@@ -178,7 +181,7 @@ def batch_validate(set_1, set_2, labels, conv1_weights, conv1_biases,
   if size < conf.BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
   stats = np.zeros(6)
-  for begin in range(0, size, conf.BATCH_SIZE):
+  for begin in range(0, size, conf.VALIDATION_BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
       s1 = set_1[begin:end, ...]
@@ -214,45 +217,13 @@ def batch_validate(set_1, set_2, labels, conv1_weights, conv1_biases,
 
 
 def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
+                         conv1_weights, conv1_biases, conv2_weights,
+                         conv2_biases, conv3_weights, conv3_biases,
+                         conv4_weights, conv4_biases,fc1_weights,
+                         fc1_biases, fcj_weights, fcj_biases,
                          dropout=False, lagrange=False):
   # input nodes
   x_1, x_2, labels = dp.inputs_placeholders()
-  # twin portion variables
-  conv1_weights = tf.Variable(tf.truncated_normal([3, 3, 1, 64],
-                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
-                              name="twin_conv1_weights")
-  conv1_biases = tf.Variable(tf.zeros([64], dtype=conf.DTYPE),
-                             name="twin_conv1_biases")
-  conv2_weights = tf.Variable(tf.truncated_normal([3, 3, 64, 128],
-                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
-                              name="twin_conv2_weights")
-  conv2_biases = tf.Variable(tf.constant(0.1, shape=[128], dtype=conf.DTYPE),
-                             name="twin_conv2_biases")
-  conv3_weights = tf.Variable(tf.truncated_normal([3, 3, 128, 256],
-                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
-                              name="twin_conv3_weights")
-  conv3_biases = tf.Variable(tf.zeros([256], dtype=conf.DTYPE),
-                             name="twin_conv3_biases")
-  conv4_weights = tf.Variable(tf.truncated_normal([3, 3, 256, 256],
-                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
-                              name="twin_conv4_weights")
-  conv4_biases = tf.Variable(tf.constant(0.1, shape=[256], dtype=conf.DTYPE),
-                             name="twin_conv4_biases")
-  # fully connected
-  conv_features = 2304 # dims of output from the convlutional layers of twins
-  fc_features = 2304 # dims of output from the fc layer of twins
-  fc1_weights = tf.Variable(tf.truncated_normal([conv_features, fc_features],
-                            stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
-                            name="twin_fc_weights")
-  fc1_biases = tf.Variable(tf.constant(0.1, shape=[fc_features], dtype=conf.DTYPE),
-                           name="twin_fc_biases")
-  # joined portion variables, turns fc_features into 1 probability
-  fcj_weights = tf.Variable(tf.truncated_normal([fc_features, 1], stddev=0.1,
-                                                seed=conf.SEED,
-                                                dtype=conf.DTYPE),
-                            name="joined_fc_weights")
-  fcj_biases = tf.Variable(tf.constant(0.1, shape=[1], dtype=conf.DTYPE),
-                           name="joined_fc_biases")
   optimizer, l = construct_loss_optimizer(x_1, x_2, labels, conv1_weights,
                                              conv1_biases, conv2_weights,
                                              conv2_biases, conv3_weights,
@@ -261,8 +232,12 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                              fc1_biases, fcj_weights, fcj_biases
                                              , dropout, lagrange)
   # creates session
-  with tf.Session() as sess:
+  saver = tf.train.Saver()
+  with tf.Session() as sess: # automatic tear down of controlled execution
     tf.global_variables_initializer().run()
+    if input("resume from previous session (y/n):") == "y":
+      path = input("enter path:")
+      saver.restore(sess, path)
     logger = tf.summary.FileWriter(conf.log_dir)
     # iterates through the training data in batch
     data_size = tset1.shape[0]
@@ -307,63 +282,99 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
         loss = sess.run(l, feed_dict=feed_dict)
         print('Minibatch Loss: %.3f' % (float(loss)))
         print('Training Accuracy: %.3f' % t_accuracy)
-        print('Training Recall: %.1f' % t_recall)
-        print('Training Precision: %.1f' % t_precision)
-        print('Training F1: %.1f' % t_f1)
+        print('Training Recall: %.3f' % t_recall)
+        print('Training Precision: %.3f' % t_precision)
+        print('Training F1: %.3f' % t_f1)
         print('Validation Accuracy: %.3f' % v_accuracy)
         print('Validation Recall: %.3f' % v_recall)
         print('Validation Precision: %.3f' % v_precision)
-        print('Validation F1: %.1f' % v_f1)
+        print('Validation F1: %.3f' % v_f1)
         sys.stdout.flush()
     logger.add_graph(sess.graph)
-    t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
-                                                             ty, conv1_weights,
-                                                             conv1_biases,
-                                                             conv2_weights,
-                                                             conv2_biases,
-                                                             conv3_weights,
-                                                             conv3_biases,
-                                                             conv4_weights,
-                                                             conv4_biases,
-                                                             fc1_weights,
-                                                             fc1_biases,
-                                                             fcj_weights,
-                                                             fcj_biases, sess)
-    v_accuracy, v_precision, v_recall, v_f1 = batch_validate(vset1, vset2,
-                                                             vy, conv1_weights,
-                                                             conv1_biases,
-                                                             conv2_weights,
-                                                             conv2_biases,
-                                                             conv3_weights,
-                                                             conv3_biases,
-                                                             conv4_weights,
-                                                             conv4_biases,
-                                                             fc1_weights,
-                                                             fc1_biases,
-                                                             fcj_weights,
-                                                             fcj_biases, sess)
     print()
     print('Training Finished')
-    print('Training Accuracy: %.3f' % t_accuracy)
-    print('Training Recall: %.1f' % t_recall)
-    print('Training Precision: %.1f' % t_precision)
-    print('Training F1: %.1f' % t_f1)
-    print('Validation Accuracy: %.3f' % v_accuracy)
-    print('Validation Recall: %.3f' % v_recall)
-    print('Validation Precision: %.3f' % v_precision)
-    print('Validation F1: %.1f' % v_f1)
+    if input("Save Variables? (y/n): ") == "y":
+      filename = datetime.datetime.now().strftime("GMT%m%d%H%M.ckpt")
+      try:
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        path = saver.save(sess, current_dir + "/saved/" + filename)
+        print("Model saved in " + path)
+      except:
+        print("Error saving to that path")
+        path = input("Enter New Path: ")
+        path = tf.train.Saver().save(sess, path)
+        print("Model saved in " + path)
+
+
+def initialize_weights():
+  # initialize weights, decides architecture dimensions
+  # twin network convolution and pooling variables
+  conv1_weights = tf.Variable(tf.truncated_normal([3, 3, 1, 64],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
+                              name="twin_conv1_weights")
+  conv1_biases = tf.Variable(tf.zeros([64], dtype=conf.DTYPE),
+                             name="twin_conv1_biases")
+  conv2_weights = tf.Variable(tf.truncated_normal([3, 3, 64, 128],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
+                              name="twin_conv2_weights")
+  conv2_biases = tf.Variable(tf.constant(0.1, shape=[128], dtype=conf.DTYPE),
+                             name="twin_conv2_biases")
+  conv3_weights = tf.Variable(tf.truncated_normal([3, 3, 128, 256],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
+                              name="twin_conv3_weights")
+  conv3_biases = tf.Variable(tf.zeros([256], dtype=conf.DTYPE),
+                             name="twin_conv3_biases")
+  conv4_weights = tf.Variable(tf.truncated_normal([3, 3, 256, 256],
+                              stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
+                              name="twin_conv4_weights")
+  conv4_biases = tf.Variable(tf.constant(0.1, shape=[256], dtype=conf.DTYPE),
+                             name="twin_conv4_biases")
+  # twin network fullly connected variables
+  conv_features = 2304 # dims of output from the convlutional layers of twins
+  fc_features = conv_features # dims of output from the fc layer of twins
+  fc1_weights = tf.Variable(tf.truncated_normal([conv_features, fc_features],
+                            stddev=0.1, seed=conf.SEED, dtype=conf.DTYPE),
+                            name="twin_fc_weights")
+  fc1_biases = tf.Variable(tf.constant(0.1, shape=[fc_features], dtype=conf.DTYPE),
+                           name="twin_fc_biases")
+  # joined network fully connected variables
+  fcj_weights = tf.Variable(tf.truncated_normal([fc_features, 1], stddev=0.1,
+                                                seed=conf.SEED,
+                                                dtype=conf.DTYPE),
+                            name="joined_fc_weights")
+  fcj_biases = tf.Variable(tf.constant(0.1, shape=[1], dtype=conf.DTYPE),
+                           name="joined_fc_biases")
+  return conv1_weights, conv1_biases, conv2_weights, conv2_biases, conv3_weights,\
+         conv3_biases, conv4_weights, conv4_biases, fc1_weights, fc1_biases,\
+         fcj_weights, fcj_biases
 
 
 def random_training_test():
   num_pairs = 1000
   tset1, tset2, tlabels = dp.generate_normalized_data(int(0.6 * num_pairs))
   vset1, vset2, vlabels = dp.generate_normalized_data(int(0.2 * num_pairs))
-  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS)
+
+  conv1_weights, conv1_biases, conv2_weights, conv2_biases, conv3_weights, \
+      conv3_biases, conv4_weights, conv4_biases, fc1_weights, fc1_biases, \
+      fcj_weights, fcj_biases = initialize_weights()
+  run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS,
+                       conv1_weights, conv1_biases, conv2_weights,
+                       conv2_biases, conv3_weights, conv3_biases,
+                       conv4_weights, conv4_biases, fc1_weights,
+                       fc1_biases, fcj_weights, fcj_biases)
 
 
 def mnist_training_test():
   tset1, tset2, tlabels, vset1, vset2, vlabels = dp.get_mnist_dataset()
+
+  conv1_weights, conv1_biases, conv2_weights, conv2_biases, conv3_weights, \
+      conv3_biases, conv4_weights, conv4_biases, fc1_weights, fc1_biases, \
+      fcj_weights, fcj_biases = initialize_weights()
   run_training_session(tset1, tset2, tlabels, vset1, vset2, vlabels, conf.NUM_EPOCHS,
+                       conv1_weights, conv1_biases, conv2_weights,
+                       conv2_biases, conv3_weights, conv3_biases,
+                       conv4_weights, conv4_biases, fc1_weights,
+                       fc1_biases, fcj_weights, fcj_biases,
                        conf.DROP, conf.L2)
 
 

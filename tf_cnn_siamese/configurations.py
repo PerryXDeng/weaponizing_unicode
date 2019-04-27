@@ -1,8 +1,9 @@
 import tensorflow as tf
 
 # for training usage
-BATCH_SIZE = 48 # about 3.1 G of float32 per 64 sized batch
+BATCH_SIZE = 32
 EPOCHS_PER_VALIDATION = 1
+VALIDATION_BATCH_SIZE = 48
 NUM_EPOCHS = 5
 # regularization
 DROP = False
