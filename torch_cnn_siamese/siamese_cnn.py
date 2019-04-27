@@ -5,7 +5,7 @@ import torch.optim as optim
 import time
 import numpy as np
 from torch_cnn_siamese.generate_datasets import get_mnist_dataset
-from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, THRESHOLD
+from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, THRESHOLD, LAMBDA, DECAY_RATE
 
 
 # Argument parsing for CMD
@@ -14,13 +14,17 @@ parser.add_argument('-b', '--batch', action='store', type=int, default=BATCH_SIZ
 parser.add_argument('-g', '--gpu', action='store', type=bool, default=True)
 parser.add_argument('-e', '--epochs', action='store', type=int, default=5)
 parser.add_argument('-p', '--path', action='store', type=str, default=str(time.time()))
+parser.add_argument('-l2', '--lagrange', action='store', type=bool, default=True)
 args = parser.parse_args()
+
+print(args)
 
 # MNIST One Shot dataset
 tset1, tset2, tlabels, vset1, vset2, vlabels = get_mnist_dataset()
 
 # GPU setting
 if torch.cuda.is_available() and args.gpu:
+    print("GPU: True")
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     torch.cuda.set_device(0)
 else:
@@ -91,16 +95,21 @@ class Net(nn.Module):
         return torch.sigmoid(result)
 
 
-def init_weights(m):
-    if isinstance(m, nn.Conv2d):
-        nn.init.xavier_normal_(m.weight)
+def l2_loss(m):
+    """
+    L2 Regularization function, computes half the L2 norm of a tensor w/o the sqrt
+    :param m: vector to compute
+    :return: half the L2 norm
+    """
+    loss = torch.sum(torch.pow(m, 2))
+    return loss / 2
 
 
 net = Net().cuda()
-# net.apply(init_weights)
 
 cross = nn.BCELoss()
 optimizer = optim.Adam(net.parameters(), lr=.001)
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, DECAY_RATE)
 
 
 def train(num_epoch):
@@ -136,16 +145,29 @@ def train(num_epoch):
         # forward, backward, optimize
         output = net((batch_x1, batch_x2))
         loss = cross(output, batch_labels)
+
+        if args.lagrange:
+            # constraints on sigmoid layers
+            regularizers = l2_loss(net.fc.weight) + l2_loss(net.fc.bias) + \
+                           l2_loss(net.final.weight) + l2_loss(net.final.bias)
+            loss += LAMBDA * regularizers
+
         loss.backward()
         optimizer.step()
 
         # print results
         if step % validation_interval == 0:
+            epoch = float(step) / steps_per_epoch
+            scheduler.step(epoch)    # Decay LR at new epoch
+
+            for param_group in optimizer.param_groups:
+                lr = param_group['lr']
+
             t_accuracy, t_precision, t_recall, t_f1 = train_net_accuracy(tset1, tset2, tlabels)
             v_accuracy, v_precision, v_recall, v_f1 = train_net_accuracy(vset1, vset2, vlabels)
 
-            print('Step %d (epoch %.2f), %.4f s' % (step, float(step) / steps_per_epoch, time.time() - start_time))
-            print('Minibatch Loss: %.3f' % (float(loss)))
+            print('Step %d (epoch %.2f), %.4f s' % (step, epoch, time.time() - start_time))
+            print('Minibatch Loss: %.3f, Learning Rate: %.5f' % (float(loss), lr))
             print('Training Accuracy: %.3f' % t_accuracy)
             print('Training Recall: %.1f' % t_recall)
             print('Training Precision: %.1f' % t_precision)
