@@ -21,10 +21,22 @@ DTYPE = tf.float32
 # dims for input
 DATA_FORMAT = ('NCHW' if tf.test.is_built_with_cuda() else 'NHWC')
 IMG_X = 28
-IMG_Y = 28
+IMG_Y = IMG_X
 NUM_CHANNELS = 1
 INPUT_SHAPE = ([BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y] if DATA_FORMAT == 'NCHW'
                else [BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
+
+# dims for twin network
+FILTER_LEN = 3
+NUM_FILTERS = [64, 128, 256, 256]
+NUM_CONVS = len(NUM_FILTERS)
+POOL_KLEN = 2
+POOL_KDIM = ([1, POOL_KLEN, POOL_KLEN, 1] if DATA_FORMAT == 'NHWC'
+             else [1, 1, POOL_KLEN, POOL_KLEN])
+NUM_POOL = 3
+FEATURE_MAP_SIZE = ((IMG_X // (POOL_KLEN ** NUM_POOL)) ** 2) * NUM_FILTERS[-1]
+NUM_FC_NEURONS = 128 # decides the number of features before squared diff
+
 
 # for discrete prediction
 THRESHOLD = 0.5
