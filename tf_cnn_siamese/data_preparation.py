@@ -10,7 +10,7 @@ def generate_normalized_data(num_pairs):
                    (num_pairs, conf.IMG_X, conf.IMG_Y, 1))
   x_2 =  np.reshape(np.random.rand(num_pairs, conf.IMG_X, conf.IMG_Y),
                    (num_pairs, conf.IMG_X, conf.IMG_Y, 1))
-  # shfiting the range from (0, 1) to (-0.5, 0.5)
+  # shifting the range from (0, 1) to (-0.5, 0.5)
   x_1 -= 0.5
   x_2 -= 0.5
   labels = np.random.choice(a=[0, 1], size=num_pairs, p=[0.48, 0.52])

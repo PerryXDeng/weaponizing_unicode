@@ -160,12 +160,12 @@ def calc_stats(output, labels):
                     num_false_positives, num_false_negatives))
 
 
-def batch_validate(x_1, x_2, labels, conv_weights, conv_biases, fc_weights,
+def batch_validate(x1, x2, labels, conv_weights, conv_biases, fc_weights,
                    fc_biases, session):
   """
   calculates the relevant metrics for the whole input dataset by batch
-  :param x_1: input image node 1
-  :param x_2: input image node 2
+  :param x1: input image node 1
+  :param x2: input image node 2
   :param labels: expected output
   :param conv_weights: nodes for convolution weights
   :param conv_biases: nodes for convolution relu biases
@@ -191,8 +191,8 @@ def batch_validate(x_1, x_2, labels, conv_weights, conv_biases, fc_weights,
     else:
       batch_predictions = session.run(model,
                                       feed_dict={
-                                      x_1: x_1[-conf.BATCH_SIZE:, ...],
-                                      x_2: x_2[-conf.BATCH_SIZE:, ...]})
+                                      x_1: x1[-conf.BATCH_SIZE:, ...],
+                                      x_2: x2[-conf.BATCH_SIZE:, ...]})
       stats += calc_stats(batch_predictions[begin - size:, :], labels[begin:])
   accuracy = stats[1] / stats[0]
   # use precision and recall for the "positive" that is underrepresented
