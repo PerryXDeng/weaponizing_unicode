@@ -174,22 +174,22 @@ def batch_validate(x1, x2, labels, conv_weights, conv_biases, fc_weights,
   :param session: the tensorflow session in which the compute takes place
   :return: the relevant metrics
   """
-  feed_1, feed_2, _ = dp.inputs_placeholders()
+  feed_1, feed_2, _ = dp.test_inputs_placeholders()
   model = construct_full_model(feed_1, feed_2, conv_weights, conv_biases,
                                fc_weights, fc_biases)
   size = x1.shape[0]
-  if size < conf.VALIDATION_BATCH_SIZE:
+  if size < conf.TEST_BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
   stats = np.zeros(6)
-  for begin in range(0, size, conf.VALIDATION_BATCH_SIZE):
-    end = begin + conf.VALIDATION_BATCH_SIZE
+  for begin in range(0, size, conf.TEST_BATCH_SIZE):
+    end = begin + conf.TEST_BATCH_SIZE
     if end <= size:
       stats += calc_stats(session.run(model,
                                       feed_dict={feed_1: x1[begin:end, ...],
                                                  feed_2: x2[begin:end, ...]}),
-                          labels[begin:end])
+                                                 labels[begin:end])
     else:
-      full_batch_offset = -1 * conf.VALIDATION_BATCH_SIZE
+      full_batch_offset = -1 * conf.TEST_BATCH_SIZE
       batch_predictions = session.run(model,
                                       feed_dict={
                                       feed_1: x1[full_batch_offset:, ...],
@@ -231,7 +231,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
   :return: None
   """
   # input nodes
-  x_1, x_2, labels = dp.inputs_placeholders()
+  x_1, x_2, labels = dp.training_inputs_placeholders()
   optimizer, l = construct_loss_optimizer(x_1, x_2, labels, conv_weights,
                                           conv_biases, fc_weights, fc_biases,
                                           dropout, lagrange)
@@ -252,16 +252,16 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
     # iterates through the training data in batch
     data_size = tset1.shape[0]
     total = int(epochs * data_size)
-    num_steps = total // conf.BATCH_SIZE
-    steps_per_epoch = data_size / conf.BATCH_SIZE
+    num_steps = total // conf.TRAIN_BATCH_SIZE
+    steps_per_epoch = data_size / conf.TRAIN_BATCH_SIZE
     validation_interval = int(conf.EPOCHS_PER_VALIDATION * steps_per_epoch)
     start_time = time.time()
     for step in range(num_steps):
       # offset of the current minibatch
-      offset = (step * conf.BATCH_SIZE) % (data_size - conf.BATCH_SIZE)
-      batch_x1 = tset1[offset:(offset + conf.BATCH_SIZE), ...]
-      batch_x2 = tset2[offset:(offset + conf.BATCH_SIZE), ...]
-      batch_labels = ty[offset:(offset + conf.BATCH_SIZE)]
+      offset = (step * conf.TRAIN_BATCH_SIZE) % (data_size - conf.TRAIN_BATCH_SIZE)
+      batch_x1 = tset1[offset:(offset + conf.TRAIN_BATCH_SIZE), ...]
+      batch_x2 = tset2[offset:(offset + conf.TRAIN_BATCH_SIZE), ...]
+      batch_labels = ty[offset:(offset + conf.TRAIN_BATCH_SIZE)]
       # maps batched input to graph data nodes
       feed_dict = {x_1: batch_x1, x_2: batch_x2, labels: batch_labels}
       # runs the optimizer every iteration

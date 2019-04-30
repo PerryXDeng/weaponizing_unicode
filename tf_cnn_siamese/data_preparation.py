@@ -17,10 +17,17 @@ def generate_normalized_data(num_pairs):
   return x_1, x_2, np.reshape(labels, (num_pairs, 1))
 
 
-def inputs_placeholders():
-  x_1 = tf.placeholder(conf.DTYPE, shape=conf.INPUT_SHAPE, name="x_1")
-  x_2 = tf.placeholder(conf.DTYPE, shape=conf.INPUT_SHAPE, name="x_2")
-  labels = tf.placeholder(conf.DTYPE, shape=(conf.BATCH_SIZE, 1), name="labels")
+def training_inputs_placeholders():
+  x_1 = tf.placeholder(conf.DTYPE, shape=conf.TRAIN_INPUT_SHAPE, name="x_1")
+  x_2 = tf.placeholder(conf.DTYPE, shape=conf.TRAIN_INPUT_SHAPE, name="x_2")
+  labels = tf.placeholder(conf.DTYPE, shape=(conf.TRAIN_BATCH_SIZE, 1), name="labels")
+  return x_1, x_2, labels
+
+
+def test_inputs_placeholders():
+  x_1 = tf.placeholder(conf.DTYPE, shape=conf.TEST_INPUT_SHAPE, name="x_1")
+  x_2 = tf.placeholder(conf.DTYPE, shape=conf.TEST_INPUT_SHAPE, name="x_2")
+  labels = tf.placeholder(conf.DTYPE, shape=(conf.TEST_BATCH_SIZE, 1), name="labels")
   return x_1, x_2, labels
 
 

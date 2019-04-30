@@ -1,9 +1,9 @@
 import tensorflow as tf
 
 # for training usage
-BATCH_SIZE = 32
+TRAIN_BATCH_SIZE = 32
 EPOCHS_PER_VALIDATION = 1
-VALIDATION_BATCH_SIZE = 48
+TEST_BATCH_SIZE = 48
 NUM_EPOCHS = 5
 # regularization
 DROP = False
@@ -23,8 +23,12 @@ DATA_FORMAT = ('NCHW' if tf.test.is_built_with_cuda() else 'NHWC')
 IMG_X = 28
 IMG_Y = IMG_X
 NUM_CHANNELS = 1
-INPUT_SHAPE = ([BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y] if DATA_FORMAT == 'NCHW'
-               else [BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
+TRAIN_INPUT_SHAPE = ([TRAIN_BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y]
+                      if DATA_FORMAT == 'NCHW'
+                      else [TRAIN_BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
+TEST_INPUT_SHAPE = ([TEST_BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y]
+                     if DATA_FORMAT == 'NCHW'
+                     else [TEST_BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
 
 # dims for twin network
 FILTER_LEN = 3
