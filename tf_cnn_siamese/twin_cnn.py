@@ -184,8 +184,8 @@ def batch_validate(x1, x2, labels, conv_weights, conv_biases, fc_weights,
   for begin in range(0, size, conf.VALIDATION_BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
-      s1 = x_1[begin:end, ...]
-      s2 = x_2[begin:end, ...]
+      s1 = x1[begin:end, ...]
+      s2 = x2[begin:end, ...]
       stats += calc_stats(session.run(model, feed_dict={x_1: s1,x_2: s2}),
                           labels[begin:end])
     else:
