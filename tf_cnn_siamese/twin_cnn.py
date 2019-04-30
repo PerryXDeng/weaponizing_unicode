@@ -174,25 +174,25 @@ def batch_validate(x1, x2, labels, conv_weights, conv_biases, fc_weights,
   :param session: the tensorflow session in which the compute takes place
   :return: the relevant metrics
   """
-  x_1, x_2, _ = dp.inputs_placeholders()
-  model = construct_full_model(x_1, x_2, conv_weights, conv_biases,
+  feed_1, feed_2, _ = dp.inputs_placeholders()
+  model = construct_full_model(feed_1, feed_2, conv_weights, conv_biases,
                                fc_weights, fc_biases)
-  size = x_1.shape[0]
+  size = x1.shape[0]
   if size < conf.BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
   stats = np.zeros(6)
   for begin in range(0, size, conf.VALIDATION_BATCH_SIZE):
     end = begin + conf.BATCH_SIZE
     if end <= size:
-      s1 = x1[begin:end, ...]
-      s2 = x2[begin:end, ...]
-      stats += calc_stats(session.run(model, feed_dict={x_1: s1,x_2: s2}),
+      stats += calc_stats(session.run(model,
+                                      feed_dict={feed_1: x1[begin:end, ...],
+                                                 feed_2: x2[begin:end, ...]}),
                           labels[begin:end])
     else:
       batch_predictions = session.run(model,
                                       feed_dict={
-                                      x_1: x1[-conf.BATCH_SIZE:, ...],
-                                      x_2: x2[-conf.BATCH_SIZE:, ...]})
+                                      feed_1: x1[-conf.BATCH_SIZE:, ...],
+                                      feed_2: x2[-conf.BATCH_SIZE:, ...]})
       stats += calc_stats(batch_predictions[begin - size:, :], labels[begin:])
   accuracy = stats[1] / stats[0]
   # use precision and recall for the "positive" that is underrepresented
