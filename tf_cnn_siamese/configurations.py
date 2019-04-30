@@ -35,7 +35,7 @@ POOL_KDIM = ([1, POOL_KLEN, POOL_KLEN, 1] if DATA_FORMAT == 'NHWC'
              else [1, 1, POOL_KLEN, POOL_KLEN])
 NUM_POOL = 3
 FEATURE_MAP_SIZE = ((IMG_X // (POOL_KLEN ** NUM_POOL)) ** 2) * NUM_FILTERS[-1]
-NUM_FC_NEURONS = 128 # decides the number of features before squared diff
+NUM_FC_NEURONS = 2304 # decides the number of features before squared diff
 
 
 # for discrete prediction

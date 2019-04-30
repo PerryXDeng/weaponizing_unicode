@@ -30,7 +30,7 @@ def single_cnn(x, conv_weights, conv_biases, fc_weights, fc_biases,
       x = tf.nn.max_pool(x, ksize=conf.POOL_KDIM,strides=conf.POOL_KDIM,
                         padding='VALID', data_format=conf.DATA_FORMAT)
     k -= 1
-  # Reshape the feature map cuboid into a matrix for fc layers
+  # Reshape the feature map cuboids into vectors for fc layers
   features_shape = x.get_shape().as_list()
   n = features_shape[0]
   m = features_shape[1] * features_shape[2] * features_shape[3]
@@ -269,6 +269,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
       if step % validation_interval == 0:
         elapsed_time = time.time() - start_time
         current_epoch = float(step) / steps_per_epoch
+        loss = sess.run(l, feed_dict=feed_dict)
         t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
                                                  ty, conv_weights, conv_biases,
                                                  fc_weights, fc_biases, sess)
@@ -277,7 +278,6 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                                  fc_weights, fc_biases, sess)
         print('\nStep %d (epoch %.2f), %.4f s'
               % (step, current_epoch, elapsed_time))
-        loss = sess.run(l, feed_dict=feed_dict)
         print('Minibatch Loss: %.3f' % (float(loss)))
         print('Training Accuracy: %.3f' % t_accuracy)
         print('Training Recall: %.3f' % t_recall)
