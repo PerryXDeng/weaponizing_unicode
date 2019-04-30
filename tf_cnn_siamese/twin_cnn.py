@@ -8,8 +8,8 @@ import sys
 import os
 
 
-def single_cnn(x, conv_weights, conv_biases, fc_weights, fc_biases,
-               dropout = False):
+def construct_cnn(x, conv_weights, conv_biases, fc_weights, fc_biases,
+                  dropout = False):
   """
   constructs the convolution graph for one image
   :param x: input node
@@ -57,11 +57,11 @@ def construct_logits_model(x_1, x_2, conv_weights, conv_biases, fc_weights,
   :return: logit node
   """
   with tf.name_scope("twin_1"):
-    twin_1 = single_cnn(x_1, conv_weights, conv_biases,
-                        fc_weights, fc_biases, dropout)
+    twin_1 = construct_cnn(x_1, conv_weights, conv_biases,
+                           fc_weights, fc_biases, dropout)
   with tf.name_scope("twin_2"):
-    twin_2 = single_cnn(x_2, conv_weights, conv_biases,
-                        fc_weights, fc_biases, dropout)
+    twin_2 = construct_cnn(x_2, conv_weights, conv_biases,
+                           fc_weights, fc_biases, dropout)
   # logits on squared difference
   sq_diff = tf.squared_difference(twin_1, twin_2)
   logits = tf.matmul(sq_diff, fc_weights[1]) + fc_biases[1]
@@ -373,5 +373,151 @@ def mnist_training_test():
                        conf.DROP, conf.L2)
 
 
+def time_full_prediction():
+  """
+  tests the running time of predictions of the full network
+  :return: None
+  """
+  tset1, tset2, ty, vset1, vset2, vy = dp.get_mnist_dataset()
+  conv_weights, conv_biases, fc_weights, fc_biases = initialize_weights()
+  # creates session
+  saver = tf.train.Saver()
+  with tf.Session() as sess: # automatic tear down of controlled execution
+    print("\n")
+    tf.global_variables_initializer().run()
+    print("Data Format " + conf.DATA_FORMAT)
+    cuda_enabled = ('NCHW' == conf.DATA_FORMAT)
+    print("CUDA Enabled: " + str(cuda_enabled))
+    if input("resume from previous session (y/n):") == "y":
+      path = input("enter path:")
+      saver.restore(sess, path)
+    start_time = time.time()
+    t_accuracy, t_precision, t_recall, t_f1 = batch_validate(tset1, tset2,
+                                                             ty, conv_weights,
+                                                             conv_biases,
+                                                             fc_weights,
+                                                             fc_biases, sess)
+    v_accuracy, v_precision, v_recall, v_f1 = batch_validate(vset1, vset2,
+                                                             vy, conv_weights,
+                                                             conv_biases,
+                                                             fc_weights,
+                                                             fc_biases, sess)
+    elapsed_time = time.time() - start_time
+    print('\n%.4f s' %  elapsed_time)
+    print("Size: "  + str(ty.shape[0] + vy.shape[0]))
+    print('Training Accuracy: %.3f' % t_accuracy)
+    print('Training Recall: %.3f' % t_recall)
+    print('Training Precision: %.3f' % t_precision)
+    print('Training F1: %.3f' % t_f1)
+    print('Validation Accuracy: %.3f' % v_accuracy)
+    print('Validation Recall: %.3f' % v_recall)
+    print('Validation Precision: %.3f' % v_precision)
+    print('Validation F1: %.3f' % v_f1)
+    sys.stdout.flush()
+
+
+def time_cnn_feature_extraction():
+  """
+  tests the running time of one twin network doing feature extraction
+  :return: None
+  """
+  tset1, tset2, ty, vset1, vset2, vy = dp.get_mnist_dataset()
+  conv_weights, conv_biases, fc_weights, fc_biases = initialize_weights()
+  # creates session
+  saver = tf.train.Saver()
+  feed_1, feed_2, labels = dp.test_inputs_placeholders()
+  cnn = construct_cnn(feed_1, conv_weights, conv_biases, fc_weights, fc_biases)
+  with tf.Session() as sess: # automatic tear down of controlled execution
+    print("\n")
+    tf.global_variables_initializer().run()
+    print("Data Format " + conf.DATA_FORMAT)
+    cuda_enabled = ('NCHW' == conf.DATA_FORMAT)
+    print("CUDA Enabled: " + str(cuda_enabled))
+    if input("resume from previous session (y/n):") == "y":
+      path = input("enter path:")
+      saver.restore(sess, path)
+    start_time = time.time()
+    # iterates through the training data in batch
+    data_size = tset1.shape[0]
+    total = data_size
+    num_steps = total // conf.TEST_BATCH_SIZE
+    for step in range(num_steps):
+      # offset of the current minibatch
+      offset = (step * conf.TEST_BATCH_SIZE) % (data_size - conf.TEST_BATCH_SIZE)
+      batch_x1 = tset1[offset:(offset + conf.TEST_BATCH_SIZE), ...]
+      # maps batched input to graph data nodes
+      feed_dict = {feed_1: batch_x1}
+      # runs the optimizer every iteration
+      sess.run(cnn, feed_dict=feed_dict)
+      # prints loss and validation error when evalidating intermittently
+    elapsed_time = time.time() - start_time
+    print('\n%.4f s' %  elapsed_time)
+    print("Size: "  + str((ty.shape[0])))
+    expected = elapsed_time * 137374 / ty.shape[0]
+    print("Expected Feature Extraction Time for 137,374 Unicode: " + str(expected))
+    sys.stdout.flush()
+
+
+def construct_joined_model(twin_1, twin_2, fc_weights, fc_biases):
+  """
+  constructs joined model for two sets of extracted features
+  :param twin_1: features node extracted from first image
+  :param twin_2: features node extracted from second image
+  :param conv_weights: nodes for convolution weights
+  :param conv_biases: nodes for convolution relu biases
+  :param fc_weights: nodes for fully connected weights
+  :param fc_biases: nodes for fully connected biases
+  :param dropout: whether to include dropout layers
+  :return: logit node
+  """
+  # logits on squared difference
+  sq_diff = tf.squared_difference(twin_1, twin_2)
+  logits = tf.matmul(sq_diff, fc_weights[1]) + fc_biases[1]
+  return tf.nn.sigmoid(logits)
+
+
+def time_joined_difference():
+  """
+  tests the running time of the joined network running on extracted features
+  :return: None
+  """
+  num_pairs = 100000
+  twin_1, twin_2 = dp.generate_features(num_pairs)
+  conv_weights, conv_biases, fc_weights, fc_biases = initialize_weights()
+  feed_1, feed_2 = dp.test_features_placeholders()
+  # creates session
+  saver = tf.train.Saver()
+  out = construct_joined_model(feed_1, feed_2, fc_weights, fc_biases)
+  with tf.Session() as sess: # automatic tear down of controlled execution
+    print("\n")
+    tf.global_variables_initializer().run()
+    print("Data Format " + conf.DATA_FORMAT)
+    cuda_enabled = ('NCHW' == conf.DATA_FORMAT)
+    print("CUDA Enabled: " + str(cuda_enabled))
+    if input("resume from previous session (y/n):") == "y":
+      path = input("enter path:")
+      saver.restore(sess, path)
+    start_time = time.time()
+    # iterates through the training data in batch
+    total = num_pairs
+    num_steps = total // conf.TEST_BATCH_SIZE
+    for step in range(num_steps):
+      # offset of the current minibatch
+      offset = (step * conf.TEST_BATCH_SIZE) % (num_pairs - conf.TEST_BATCH_SIZE)
+      batch_x1 = twin_1[offset:(offset + conf.TEST_BATCH_SIZE), ...]
+      batch_x2 = twin_2[offset:(offset + conf.TEST_BATCH_SIZE), ...]
+      # maps batched input to graph data nodes
+      feed_dict = {feed_1: batch_x1, feed_2: batch_x2}
+      # runs the optimizer every iteration
+      sess.run(out, feed_dict=feed_dict)
+      # prints loss and validation error when evalidating intermittently
+    elapsed_time = time.time() - start_time
+    print('\n%.4f s' %  elapsed_time)
+    print("Size: "  + str(num_pairs))
+    expected = elapsed_time * 9435739251 / num_pairs
+    print("Expected Feature Extraction Time for 10B Pairs: " + str(expected))
+    sys.stdout.flush()
+
+
 if __name__ == "__main__":
-  mnist_training_test()
+  time_joined_difference()

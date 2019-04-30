@@ -17,6 +17,15 @@ def generate_normalized_data(num_pairs):
   return x_1, x_2, np.reshape(labels, (num_pairs, 1))
 
 
+def generate_features(num_pairs):
+  # pairs of fake features
+  twin_1 = np.reshape(np.random.rand(num_pairs, conf.NUM_FC_NEURONS),
+                     (num_pairs, conf.NUM_FC_NEURONS))
+  twin_2 = np.reshape(np.random.rand(num_pairs, conf.NUM_FC_NEURONS),
+                     (num_pairs, conf.NUM_FC_NEURONS))
+  return twin_1, twin_2
+
+
 def training_inputs_placeholders():
   x_1 = tf.placeholder(conf.DTYPE, shape=conf.TRAIN_INPUT_SHAPE, name="x_1")
   x_2 = tf.placeholder(conf.DTYPE, shape=conf.TRAIN_INPUT_SHAPE, name="x_2")
@@ -29,6 +38,16 @@ def test_inputs_placeholders():
   x_2 = tf.placeholder(conf.DTYPE, shape=conf.TEST_INPUT_SHAPE, name="x_2")
   labels = tf.placeholder(conf.DTYPE, shape=(conf.TEST_BATCH_SIZE, 1), name="labels")
   return x_1, x_2, labels
+
+
+def test_features_placeholders():
+  twin_1 = tf.placeholder(conf.DTYPE,
+                          shape=(conf.TEST_BATCH_SIZE, conf.NUM_FC_NEURONS),
+                          name="twin_1")
+  twin_2 = tf.placeholder(conf.DTYPE,
+                          shape=(conf.TEST_BATCH_SIZE, conf.NUM_FC_NEURONS),
+                          name="twin_2")
+  return twin_1, twin_2
 
 
 def get_mnist_dataset():

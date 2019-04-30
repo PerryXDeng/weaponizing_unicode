@@ -3,7 +3,7 @@ import tensorflow as tf
 # for training usage
 TRAIN_BATCH_SIZE = 32
 EPOCHS_PER_VALIDATION = 1
-TEST_BATCH_SIZE = 48
+TEST_BATCH_SIZE = 512
 NUM_EPOCHS = 5
 # regularization
 DROP = False
