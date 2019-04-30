@@ -181,18 +181,19 @@ def batch_validate(x1, x2, labels, conv_weights, conv_biases, fc_weights,
   if size < conf.BATCH_SIZE:
     raise ValueError("batch size for validation larger than dataset: %d" % size)
   stats = np.zeros(6)
-  for begin in range(0, size, conf.VALIDATION_BATCH_SIZE):
-    end = begin + conf.BATCH_SIZE
+  for begin in range(0, size, conf.BATCH_SIZE):
+    end = begin + conf.VALIDATION_BATCH_SIZE
     if end <= size:
       stats += calc_stats(session.run(model,
                                       feed_dict={feed_1: x1[begin:end, ...],
                                                  feed_2: x2[begin:end, ...]}),
                           labels[begin:end])
     else:
+      full_batch_offset = -1 * conf.VALIDATION_BATCH_SIZE
       batch_predictions = session.run(model,
                                       feed_dict={
-                                      feed_1: x1[-conf.BATCH_SIZE:, ...],
-                                      feed_2: x2[-conf.BATCH_SIZE:, ...]})
+                                      feed_1: x1[full_batch_offset:, ...],
+                                      feed_2: x2[full_batch_offset:, ...]})
       stats += calc_stats(batch_predictions[begin - size:, :], labels[begin:])
   accuracy = stats[1] / stats[0]
   # use precision and recall for the "positive" that is underrepresented
