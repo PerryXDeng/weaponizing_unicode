@@ -11,6 +11,10 @@ optimization, which will wait until the actual unicode dataset is ready.
 ## Todo
 separate exporting of twin and joined network models
 
+data pipeline
+
+distributed computing
+
 xavier initialization
 
 adjusting hyperparameters for actual datasets
