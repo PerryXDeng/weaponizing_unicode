@@ -1,0 +1,2 @@
+model_checkpoint_path: "/Workspace/siamese_test/tf_cnn_siamese/saved/GMT05082157.ckpt"
+all_model_checkpoint_paths: "/Workspace/siamese_test/tf_cnn_siamese/saved/GMT05082157.ckpt"

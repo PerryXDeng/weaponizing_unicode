@@ -29,6 +29,9 @@ TRAIN_INPUT_SHAPE = ([TRAIN_BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y]
 TEST_INPUT_SHAPE = ([TEST_BATCH_SIZE, NUM_CHANNELS, IMG_X, IMG_Y]
                      if DATA_FORMAT == 'NCHW'
                      else [TEST_BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
+PREDICT_INPUT_SHAPE = ([1, NUM_CHANNELS, IMG_X, IMG_Y]
+                        if DATA_FORMAT == 'NCHW'
+                        else [TEST_BATCH_SIZE, IMG_X, IMG_Y, NUM_CHANNELS])
 
 # dims for twin network
 FILTER_LEN = 3
