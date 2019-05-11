@@ -2,14 +2,36 @@ import cv2
 from random import randint
 import numpy as np
 from PIL import ImageFont, ImageDraw, Image, ImageFilter
+from itertools import chain
+import sys
+
+from fontTools.ttLib import TTFont
+from fontTools.unicode import Unicode
+
 
 def main():
-    fontPath = "./ARIALUNI.ttf"
+    fontPath = "../fonts/ARIALUNI.ttf"
 
     img = drawChar(u"\u262f", 12, fontPath)
     cv2.namedWindow("Character Display")  # Create a window for display.
     cv2.imshow("Character Display", img)  # Show our image inside it.
     cv2.waitKey(0)                      # Wait for a keystroke in the window
+    #
+    # ttf = TTFont(sys.argv[1], 0, verbose=0, allowVID=0,
+    #              ignoreDecompileErrors=True,
+    #              fontNumber=-1)
+    #
+    # chars = chain.from_iterable([y + (Unicode[y[0]],) for y in x.cmap.items()] for x in ttf["cmap"].tables)
+    # print(list(chars))
+    #
+    # # Use this for just checking if the font contains the codepoint given as
+    # # second argument:
+    # #char = int(sys.argv[2], 0)
+    # #print(Unicode[char])
+    # #print(char in (x[0] for x in chars))
+    #
+    # ttf.close()
+
     return 0
 
 
@@ -52,5 +74,7 @@ def drawChar(chars, font_size, font_path, openCV=False, color=(0, 0, 0), base_im
     base_image = np.array(img_PIL)
 
     return base_image
+
+
 
 main()
