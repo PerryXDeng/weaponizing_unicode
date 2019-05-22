@@ -20,7 +20,7 @@ __UnicodeMap = List[str]
 
 UNDEFINED_BLOCK = "undefined" # for indicating that a character is not defined
 
-def is_character_block(block_name: str) -> bool:
+def _is_character_block(block_name: str) -> bool:
   """
   checks if block implements actual characters
   :param block_name: name of the block
@@ -57,7 +57,7 @@ def map_blocks() -> (__UnicodeBlocks, __UnicodeMap, int):
       if len(line) > 0 and line[0] != '\n' and line[0] != '#':
         line = line.strip()
         (hex_range, block_name) = line.split("; ")
-        if is_character_block(block_name):
+        if _is_character_block(block_name):
           (start_hex, end_hex) = hex_range.split("..")
           start = int(start_hex, 16)
           end = int(end_hex, 16)
@@ -70,11 +70,11 @@ def map_blocks() -> (__UnicodeBlocks, __UnicodeMap, int):
   # as of unicode 12
   # block_map produces an array for the first 900k unicode code points
   # around 140k of which belong to blocks with defined code points
-  n = prune_block_map(block_map)
+  n = _prune_block_map(block_map)
   return blocks, block_map, n
 
 
-def is_code_range(description:str) -> int:
+def _is_code_range(description:str) -> int:
   """
   determines whether an entry is a code point or the start/end of a range
   :param description: entry description, second field in line
@@ -88,7 +88,7 @@ def is_code_range(description:str) -> int:
   return -1
 
 
-def prune_block_map(block_map:__UnicodeMap):
+def _prune_block_map(block_map:__UnicodeMap):
   """
   goes through the block map and "un-define" the blocks for characters
   that are not actually implemented
@@ -104,9 +104,9 @@ def prune_block_map(block_map:__UnicodeMap):
       line = lines[i].strip()
       fields = line.split(";")
       if len(line) > 0 and fields[1] != "<control>"\
-              and is_character_block(fields[1]):
+              and _is_character_block(fields[1]):
         index = int(fields[0], 16)
-        retval = is_code_range(fields[1])
+        retval = _is_code_range(fields[1])
         if retval == -1:
           implemented[index] = True
           n += 1
