@@ -43,7 +43,7 @@ def count_implemented_characters(fontdir:str) -> (int, int):
 
 
 def main():
-  print(count_implemented_characters(_FONT_DIR + "*/*.ttf"))
+  print(count_implemented_characters(_FONT_DIR + "os_fonts/*/*.ttf"))
 
 
 if __name__ == "__main__":
