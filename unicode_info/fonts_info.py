@@ -19,7 +19,11 @@ def implemented_characters_indices(fontpath:str) -> np.array:
   :param fontpath: file path to font
   :return: array of indices
   """
-  ttf = TTFont(fontpath)
+  try:
+    ttf = TTFont(fontpath)
+  except IsADirectoryError:
+    print(fontpath)
+    return np.asarray([32])
   return np.asarray(list(ttf["cmap"].getBestCmap().keys()))
 
 
@@ -29,10 +33,18 @@ def count_implemented_characters(fontdir:str) -> (int, int):
   :param fontdir: directory of fonts
   :return: number of covered characters and number of total characters
   """
-  ttf_filepaths = glob.glob(_FONT_DIR + "*.ttf")
+  ttf_filepaths = glob.glob(_FONT_DIR, recursive=True)
   _, indices, n = db.map_blocks()
   covered = np.full(len(indices), False)
   for filepath in ttf_filepaths:
       covered[implemented_characters_indices(filepath)] = True
   coverage = np.sum(covered)
   return coverage, n
+
+
+def main():
+  print(count_implemented_characters(_FONT_DIR + "*/*.ttf"))
+
+
+if __name__ == "__main__":
+  main()
