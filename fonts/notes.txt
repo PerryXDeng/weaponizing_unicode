@@ -2,4 +2,5 @@ win_fonts ttf coverage: 94.4k
 mac_fonts coverage: 46.8k
 win + mac: 109k
 noto_fonts coverage: apparently only 20k (CJK fonts are .otf and not included)
-all coverage: 112493
+    converting the CJK fonts into ttf files bumped that to 63k
+all coverage: 113107
