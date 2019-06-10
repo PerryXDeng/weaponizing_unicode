@@ -18,7 +18,7 @@ _MAC = "os_fonts/mac_fonts/*.ttf"
 _ALL = "*/*/*.ttf"
 _TEST = "NotoSansCJKjp-Regular.ttf"
 
-def map_implemented_characters_indices(fontpath:str, covered:np.array) -> np.array:
+def map_implemented_characters_indices(fontpath:str, covered:np.array):
   """
   gets the indices of implemented characters in a font and flips the indices to true
   :param fontpath: file path to font
@@ -64,8 +64,34 @@ def count_implemented_characters(fontdir:str) -> (int, int):
   return coverage, n
 
 
+def map_character_to_fontpath():
+  directories = [_FONT_DIR + _NOTO, _FONT_DIR + _MAC, _FONT_DIR + _WIN]
+
+  _, indices, n = db.map_blocks()
+  mapp = np.empty(len(indices), dtype=object)
+
+  for directory in directories:
+    ttf_filepaths = glob.glob(directory, recursive=True)
+    for filepath in ttf_filepaths:
+      ttf = TTFont(filepath)
+      largest_table = None
+      # picks the largest sub table
+      # https://docs.microsoft.com/en-us/typography/opentype/spec/cmap
+      for table in ttf["cmap"].tables:
+        if largest_table is None:
+          largest_table = table.cmap
+        else:
+          if len(table.cmap) > len(largest_table):
+            largest_table = table.cmap
+      boundary = mapp.shape[0]
+      indices = [key for key in list(largest_table.keys()) if not key > boundary]  # emits private uses
+      indices = np.asarray(indices, dtype=np.int32)
+      new_additions = indices[np.where(mapp[indices] == None)] # map character in if not already mapped
+      mapp[new_additions] = filepath
+  return mapp
+
+
 def main():
-  #print(count_implemented_characters(_FONT_DIR + _TEST))
   print(count_implemented_characters(_FONT_DIR + _ALL))
 
 
