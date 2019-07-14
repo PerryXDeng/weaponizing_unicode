@@ -12,9 +12,11 @@ from fontTools.unicode import Unicode
 def main():
     fontPath = "../fonts/ARIALUNI.ttf"
 
-    img = drawChar(u"\u262f", 12, fontPath)
+    img = drawChar(u"\u0187", 12, fontPath)
     cv2.namedWindow("Character Display")  # Create a window for display.
     cv2.imshow("Character Display", img)  # Show our image inside it.
+    cv2.waitKey(0)
+    cv2.imshow("Affine Transformation display", transformImg(img))
     cv2.waitKey(0)                      # Wait for a keystroke in the window
     #
     # ttf = TTFont(sys.argv[1], 0, verbose=0, allowVID=0,
@@ -47,7 +49,6 @@ def randomize_location(font_obj, chars, out_of_bounds_threshold=0, x_range=28, y
     width = font_obj.getsize(chars)[0]
     height = font_obj.getsize(chars)[1]
     print("Text width: " + str(width) + "\nText height: " + str(height))
-
     x_max = (x_range + out_of_bounds_threshold) - width
     y_max = (y_range + out_of_bounds_threshold) - height
     x_start = 0 - out_of_bounds_threshold
@@ -76,5 +77,31 @@ def drawChar(chars, font_size, font_path, openCV=False, color=(0, 0, 0), base_im
     return base_image
 
 
+# Assumes the tensor is an n*28*28*1 array of integers between 0 and 255 inclusive
+# The function returns the array with each 28*28*1 tensor having an affine transformation performed on it
+# Testing first on just showing a single tensor, then will work on iteration
+def transformImg(img):
+    rows, cols, ch = img.shape
+
+    # Creates 3 random start and end points for the transformation
+    randStart = np.float32([[0, 0], [0, 27], [27, 27]])
+
+    randEnd = np.float32([[randint(0, 3), randint(0, 3)], [randint(0, 3), 27 - randint(0, 3)], [27 - randint(0, 3), 27 - randint(0, 3)]])
+
+    # Applies the transformation to the given image
+    matrix = cv2.getAffineTransform(randStart, randEnd)
+    result = cv2.warpAffine(img, matrix, (cols, rows), borderValue=(255, 255, 255))
+    return result
+
+
+# Applies the random affine transformations to an entire tensor of images
+def transformTensor(tensor):
+    # Gets the number of images in the tensor
+    n = np.shape(tensor)[0]
+    for i in range(0, n):
+        tensor[i] = transformImg(tensor[i])
+    return tensor
+
 
 main()
+
