@@ -12,7 +12,7 @@ from fontTools.unicode import Unicode
 def main():
     fontPath = "../fonts/ARIALUNI.ttf"
 
-    img = drawChar(u"\u0187", 12, fontPath)
+    img = drawChar(u"\u279D", 12, fontPath)
     cv2.namedWindow("Character Display")  # Create a window for display.
     cv2.imshow("Character Display", img)  # Show our image inside it.
     cv2.waitKey(0)
@@ -86,7 +86,7 @@ def transformImg(img):
     # Creates 3 random start and end points for the transformation
     randStart = np.float32([[0, 0], [0, 27], [27, 27]])
 
-    randEnd = np.float32([[randint(0, 3), randint(0, 3)], [randint(0, 3), 27 - randint(0, 3)], [27 - randint(0, 3), 27 - randint(0, 3)]])
+    randEnd = np.float32([[randint(-3, 3), randint(-3, 3)], [randint(-3, 3), 27 - randint(-3, 3)], [27 - randint(-3, 3), 27 - randint(-3, 3)]])
 
     # Applies the transformation to the given image
     matrix = cv2.getAffineTransform(randStart, randEnd)
