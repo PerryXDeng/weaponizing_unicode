@@ -57,3 +57,6 @@ log_dir = "/tmp/siamese_tensorflow/test"
 
 # for fake data generator
 SEED = 42069
+
+# for real data generator
+FONT_SIZE = 12

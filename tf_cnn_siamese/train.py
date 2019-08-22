@@ -33,7 +33,7 @@ def run_training_session(tset1, tset2, ty, vset1, vset2, vy, epochs,
                                           dropout, lagrange)
   # creates session
   saver = tf.train.Saver()
-  with tf.Session() as sess: # automatic tear down of controlled execution
+  with tf.Session(config=config) as sess: # automatic tear down of controlled execution
     print("\n")
     tf.global_variables_initializer().run()
     print("Data Format " + conf.DATA_FORMAT)
@@ -201,4 +201,9 @@ def mnist_training_test():
                        conf.DROP, conf.L2)
 
 if __name__ == "__main__":
+  # nvidia rtx 2070 bug workaround
+  global config
+  config = tf.ConfigProto()
+  config.gpu_options.allow_growth = True
+  
   mnist_training_test()

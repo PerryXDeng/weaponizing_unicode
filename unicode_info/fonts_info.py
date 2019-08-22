@@ -65,10 +65,14 @@ def count_implemented_characters(fontdir:str) -> (int, int):
 
 
 def map_character_to_fontpath():
+  """
+  maps all characters to paths of fonts that support them, if any
+  :return: np array of (int, string)s
+  """
   directories = [_FONT_DIR + _NOTO, _FONT_DIR + _MAC, _FONT_DIR + _WIN]
 
-  _, indices, n = db.map_blocks()
-  mapp = np.empty(len(indices), dtype=object)
+  _, code_points, _ = db.map_blocks()
+  mapp = np.empty(len(code_points), dtype=object)
 
   for directory in directories:
     ttf_filepaths = glob.glob(directory, recursive=True)
@@ -86,13 +90,16 @@ def map_character_to_fontpath():
       boundary = mapp.shape[0]
       indices = [key for key in list(largest_table.keys()) if not key > boundary]  # emits private uses
       indices = np.asarray(indices, dtype=np.int32)
-      new_additions = indices[np.where(mapp[indices] == None)] # map character in if not already mapped
+      # map character in if not already mapped
+      new_additions = np.intersect1d(indices, np.where(mapp == None)[0], assume_unique=True)
       mapp[new_additions] = filepath
   return mapp
 
 
 def main():
-  print(count_implemented_characters(_FONT_DIR + _ALL))
+  map = map_character_to_fontpath()
+  print(np.where(map != None)[0].shape[0])
+  return
 
 
 if __name__ == "__main__":

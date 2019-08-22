@@ -1,84 +1,40 @@
 import cv2
 from random import randint
 import numpy as np
-from PIL import ImageFont, ImageDraw, Image, ImageFilter
-from itertools import chain
-import sys
-
-from fontTools.ttLib import TTFont
-from fontTools.unicode import Unicode
-
-
-def main():
-    fontPath = "../fonts/ARIALUNI.ttf"
-
-    img = drawChar(u"\u279D", 12, fontPath)
-    cv2.namedWindow("Character Display")  # Create a window for display.
-    cv2.imshow("Character Display", img)  # Show our image inside it.
-    cv2.waitKey(0)
-    cv2.imshow("Affine Transformation display", transformImg(img))
-    cv2.waitKey(0)                      # Wait for a keystroke in the window
-    #
-    # ttf = TTFont(sys.argv[1], 0, verbose=0, allowVID=0,
-    #              ignoreDecompileErrors=True,
-    #              fontNumber=-1)
-    #
-    # chars = chain.from_iterable([y + (Unicode[y[0]],) for y in x.cmap.items()] for x in ttf["cmap"].tables)
-    # print(list(chars))
-    #
-    # # Use this for just checking if the font contains the codepoint given as
-    # # second argument:
-    # #char = int(sys.argv[2], 0)
-    # #print(Unicode[char])
-    # #print(char in (x[0] for x in chars))
-    #
-    # ttf.close()
-
-    return 0
-
+from PIL import ImageFont, ImageDraw, Image
 
 
 def build_28x28_white_image():
     img = np.zeros((28, 28, 3), np.uint8)
-    img[:] = tuple(reversed((255, 255, 255)))
+    img[:] = 255
     return img
 
 
-#
 def randomize_location(font_obj, chars, out_of_bounds_threshold=0, x_range=28, y_range=28):
     width = font_obj.getsize(chars)[0]
     height = font_obj.getsize(chars)[1]
-    print("Text width: " + str(width) + "\nText height: " + str(height))
     x_max = (x_range + out_of_bounds_threshold) - width
     y_max = (y_range + out_of_bounds_threshold) - height
     x_start = 0 - out_of_bounds_threshold
     y_start = 0 - out_of_bounds_threshold
-
     rand_x_coord = randint(x_start, x_max)
     rand_y_coord = randint(y_start, y_max)
-
     return rand_x_coord, rand_y_coord
 
 
 
-def drawChar(chars, font_size, font_path, openCV=False, color=(0, 0, 0), base_image=build_28x28_white_image()):
+def drawChar(chars, font_size, font_path, color=(0, 0, 0), base_image=build_28x28_white_image()):
     font = ImageFont.truetype(font_path, font_size)
-
-    random_location_x, random_locaiton_y = randomize_location(font, chars)
-
-
-    print("Random location of x: " + str(random_location_x) + "\nRandom location of Y: " + str(random_locaiton_y))
+    random_location_x, random_location_y = randomize_location(font, chars)
     img_PIL = Image.fromarray(base_image)
     draw_PIL = ImageDraw.Draw(img_PIL)
-    coordinates = (random_location_x,random_locaiton_y) # Top-left of character
+    coordinates = (random_location_x,random_location_y) # Top-left of character
     draw_PIL.text(coordinates, chars, font=font, fill=color)
     base_image = np.array(img_PIL)
-
     return base_image
 
 
-# Assumes the tensor is an n*28*28*1 array of integers between 0 and 255 inclusive
-# The function returns the array with each 28*28*1 tensor having an affine transformation performed on it
+
 # Testing first on just showing a single tensor, then will work on iteration
 def transformImg(img):
     rows, cols, ch = img.shape
@@ -94,6 +50,8 @@ def transformImg(img):
     return result
 
 
+# Assumes the tensor is an n*28*28*1 array of integers between 0 and 255 inclusive
+# The function returns the array with each 28*28*1 tensor having an affine transformation performed on it
 # Applies the random affine transformations to an entire tensor of images
 def transformTensor(tensor):
     # Gets the number of images in the tensor
@@ -102,6 +60,24 @@ def transformTensor(tensor):
         tensor[i] = transformImg(tensor[i])
     return tensor
 
+# turns ..., 28, 28, 3 to ..., 28, 28, 1
+def rgb2gray(rgb):
+    return np.reshape(np.dot(rgb[...,:3], [0.2125, 0.7154, 0.0721]), (list(rgb.shape[:-1]) + [1]))
 
-main()
+
+def main():
+    fontPath = "../fonts/ARIALUNI.ttf"
+    img = drawChar(u"\u279D", 12, fontPath)
+    Image.fromarray(img, mode='RGB').show()
+    img = rgb2gray(img)
+
+    img = np.reshape(img, (28, 28))
+    img.astype(np.int8, copy=False)
+    img = np.reshape(img, (28, 28))
+    #Image.fromarray(img, mode='L').show()
+    return
+
+
+if __name__ == "__main__":
+    main()
 
