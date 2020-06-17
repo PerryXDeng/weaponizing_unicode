@@ -16,16 +16,14 @@ def randomize_location(font_obj, chars, x_range, y_range, out_of_bounds_threshol
     return rand_x_coord, rand_y_coord
 
 
-
 def drawChar(img_size, chars, font_size, font_path, color=0):
-    font = ImageFont.truetype(font_path, int(img_size*font_size))
-    
+    font = ImageFont.truetype(font_path, int(img_size * font_size))
+
     img_PIL = Image.fromarray(np.full((img_size, img_size), 255, dtype=np.uint8), mode='L')
     draw_PIL = ImageDraw.Draw(img_PIL)
-    coordinates = randomize_location(font, chars, x_range=img_size, y_range=img_size) # Top-left of character
+    coordinates = randomize_location(font, chars, x_range=img_size, y_range=img_size)  # Top-left of character
     draw_PIL.text(coordinates, chars, font=font, fill=color)
     return np.array(img_PIL)
-
 
 
 # Testing first on just showing a single tensor, then will work on iteration
@@ -36,7 +34,7 @@ def transformImg(img):
 
     # Creates 3 random start and end points for the transformation
     randStart = np.float32([[0, 0], [0, size], [size, size]])
-    randEnd = randStart + np.random.uniform(-0.1*size, +0.1*size, size=randStart.shape).astype(np.float32)
+    randEnd = randStart + np.random.uniform(-0.1 * size, +0.1 * size, size=randStart.shape).astype(np.float32)
 
     # Applies the transformation to the given image
     matrix = cv2.getAffineTransform(randStart, randEnd)
@@ -58,17 +56,18 @@ def transformTensor(tensor):
 def main():
     fontPath = "../fonts/ARIALUNI.ttf"
     IMG_SIZE = 28
-    img = drawChar(IMG_SIZE, u"\u279D", 0.43, fontPath)
+    img = drawChar(IMG_SIZE, u"\u279D", 0.9, fontPath)
     img = transformImg(img)
-    
+
     # img = cv2.resize(img, (28,28), interpolation=cv2.INTER_AREA)
-    
+
     assert img.shape == (IMG_SIZE, IMG_SIZE)
     assert img.dtype == np.uint8
-    
-    import matplotlib.pyplot as plt
-    plt.imshow(img, cmap='gray')
-    plt.show()
+
+    cv2.imshow('Drawn character', img)
+    # Display until space bar pressed
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
