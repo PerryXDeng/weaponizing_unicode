@@ -2,7 +2,7 @@ import tf_cnn_siamese.configurations as conf
 import tf_mnist.generate_datasets as tfdata
 import tensorflow as tf
 import numpy as np
-import unicode_info.fonts_info as unicodes
+import fonts.fonts_info as unicodes
 import generate_text.generate_character as generator
 
 
@@ -90,7 +90,7 @@ def generate_1000k_pairs():
   # actually 1,131,070 pairs
   # 500k look-alikes + 500k random-pairs (for every char, pick another char and have 5 distorted pairs)
   multiplied = 5 * 2
-  font_paths = unicodes.map_character_to_fontpath()
+  font_paths = unicodes.map_character_to_single_fontpath()
   implemented = np.where(font_paths != None)
   n = implemented.shape[0] * multiplied
   x_1 = np.empty((n, conf.IMG_X, conf.IMG_Y, conf.NUM_CHANNELS), dtype=np.float_)

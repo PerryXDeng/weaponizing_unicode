@@ -6,17 +6,21 @@ extracts meta information from .ttf font files
 """
 import numpy as np
 import glob
+import os
+import pickle
 from fontTools.ttLib import TTFont
-import unicode_info.database as db
+from unicode_info import database as db
 
 
-_FONT_DIR = "/home/pxd256/Workspace/project_punyslayer/fonts/"
+_FONT_ROOTDIR = ""
 _NOTO = "noto_fonts/regular/*.ttf"
 _OS = "os_fonts/*/*.ttf"
 _WIN = "os_fonts/win_fonts/*.ttf"
 _MAC = "os_fonts/mac_fonts/*.ttf"
 _ALL = "*/*/*.ttf"
 _TEST = "NotoSansCJKjp-Regular.ttf"
+
+_FONT_DIRS = [os.path.join(_FONT_ROOTDIR, _NOTO), os.path.join(_FONT_ROOTDIR, _MAC), os.path.join(_FONT_ROOTDIR, _WIN)]
 
 def map_implemented_characters_indices(fontpath:str, covered:np.array):
   """
@@ -64,17 +68,16 @@ def count_implemented_characters(fontdir:str) -> (int, int):
   return coverage, n
 
 
-def map_character_to_fontpath():
+def map_character_to_single_fontpath():
   """
   maps all characters to paths of fonts that support them, if any
   :return: np array of (int, string)s
   """
-  directories = [_FONT_DIR + _NOTO, _FONT_DIR + _MAC, _FONT_DIR + _WIN]
 
-  _, code_points, _ = db.map_blocks()
-  mapp = np.empty(len(code_points), dtype=object)
+  _, codepoint_block, _ = db.map_blocks()
+  font_paths = {}
 
-  for directory in directories:
+  for directory in _FONT_DIRS:
     ttf_filepaths = glob.glob(directory, recursive=True)
     for filepath in ttf_filepaths:
       ttf = TTFont(filepath)
@@ -87,19 +90,52 @@ def map_character_to_fontpath():
         else:
           if len(table.cmap) > len(largest_table):
             largest_table = table.cmap
-      boundary = mapp.shape[0]
-      indices = [key for key in list(largest_table.keys()) if not key > boundary]  # emits private uses
-      indices = np.asarray(indices, dtype=np.int32)
-      # map character in if not already mapped
-      new_additions = np.intersect1d(indices, np.where(mapp == None)[0], assume_unique=True)
-      mapp[new_additions] = filepath
-  return mapp
+      boundary = len(codepoint_block)
+      for index in list(largest_table.keys()):
+        if index < boundary and not font_paths[index]:
+          font_paths[index] = filepath
+  return font_paths
+
+
+def map_character_to_multiple_fontpath():
+  """
+  maps all characters to paths of fonts that support them, if any
+  :return: np array of (int, string)s
+  """
+
+  _, codepoint_block, _ = db.map_blocks()
+  font_paths = {}
+
+  for directory in _FONT_DIRS:
+    ttf_filepaths = glob.glob(directory, recursive=True)
+    for filepath in ttf_filepaths:
+      ttf = TTFont(filepath)
+      largest_table = None
+      # picks the largest sub table
+      # https://docs.microsoft.com/en-us/typography/opentype/spec/cmap
+      for table in ttf["cmap"].tables:
+        if largest_table is None:
+          largest_table = table.cmap
+        else:
+          if len(table.cmap) > len(largest_table):
+            largest_table = table.cmap
+      boundary = len(codepoint_block)
+      for index in list(largest_table.keys()):
+        if index < boundary:
+          if index in font_paths:
+            font_paths[index].append(filepath)
+          else:
+            font_paths[index] = [filepath]
+  return font_paths
+
+
+def serialize_keys_fontpaths_mapping():
+  with open('multifont_mapping.pkl', 'wb+') as f:
+    pickle.dump(map_character_to_multiple_fontpath(), f)
 
 
 def main():
-  map = map_character_to_fontpath()
-  print(np.where(map != None)[0].shape[0])
-  return
+  serialize_keys_fontpaths_mapping()
 
 
 if __name__ == "__main__":
