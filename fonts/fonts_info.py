@@ -71,7 +71,7 @@ def count_implemented_characters(fontdir:str) -> (int, int):
 def map_character_to_single_fontpath():
   """
   maps all characters to paths of fonts that support them, if any
-  :return: np array of (int, string)s
+  :return: {codepoint:fontpath}
   """
 
   _, codepoint_block, _ = db.map_blocks()
@@ -100,7 +100,7 @@ def map_character_to_single_fontpath():
 def map_character_to_multiple_fontpath():
   """
   maps all characters to paths of fonts that support them, if any
-  :return: np array of (int, string)s
+  :return: {codepoint:[fontpaths]}
   """
 
   _, codepoint_block, _ = db.map_blocks()
