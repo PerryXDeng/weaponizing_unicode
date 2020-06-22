@@ -3,7 +3,7 @@ import numpy as np
 import random
 
 
-def create_pairs(x_train, digit_indices):
+def create_pairs(x, digit_indices):
     random.seed(0)
     num_classes = 10
     pairs = []
@@ -13,11 +13,11 @@ def create_pairs(x_train, digit_indices):
     for d in range(num_classes):
         for i in range(n):
             z1, z2 = digit_indices[d][i], digit_indices[d][i + 1]
-            pairs += [[x_train[z1], x_train[z2]]]	# pair of data of the same class
+            pairs += [[x[z1], x[z2]]]	# pair of data of the same class
             inc = random.randrange(1, num_classes)
             dn = (d + inc) % num_classes# random class
             z1, z2 = digit_indices[d][i], digit_indices[dn][i]
-            pairs += [[x_train[z1], x_train[z2]]]   # pair of data of two different class
+            pairs += [[x[z1], x[z2]]]   # pair of data of two different class
             labels += [1, 0]            # two consecutive pairs
     return np.array(pairs), np.array(labels)
 
