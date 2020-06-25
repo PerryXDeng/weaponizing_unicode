@@ -95,7 +95,8 @@ for epoch in range(n_epochs):
     negatives_converted = data_preprocess(negatives, training_choices[0], training_choices[1])
     x1_test_converted = data_preprocess(x_1_test, training_choices[0], training_choices[1])
     x2_test_converted = data_preprocess(x_2_test, training_choices[0], training_choices[1])
-    epoch_train_loss = tf.convert_to_tensor(0,dtype=tf.float32)
+    y_test = tf.squeeze(tf.convert_to_tensor(y_test,dtype=tf.float32))
+    epoch_train_loss = tf.convert_to_tensor(0, dtype=tf.float32)
     for train_batch in range(n_train_batches):
         with tf.GradientTape() as tape:
             batch_start = train_batch_size * train_batch
@@ -104,18 +105,21 @@ for epoch in range(n_epochs):
             neg = negatives_converted[batch_start:batch_start + train_batch_size]
             anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
             loss = cos_triplet_loss(anchor_forward, positive_forward, negative_forward)
-            epoch_train_loss+=loss
+            epoch_train_loss += loss
         # Get gradients of loss wrt the weights.
         gradients = tape.gradient(loss, model.trainable_weights)
         # Update the weights of the model.
         optimizer.apply_gradients(zip(gradients, model.trainable_weights))
-    print(f"Epoch #{epoch+1} Training Loss: " + str(epoch_train_loss/n_train_batches))
-    epoch_test_loss = 0
+    print(f"Epoch #{epoch + 1} Training Loss: " + str(epoch_train_loss / n_train_batches))
+    epoch_test_loss = tf.convert_to_tensor(0, dtype=tf.float32)
     for test_batch in range(n_test_batches):
         batch_start = test_batch_size * test_batch
-        x1_forward,x2_forward = model.predict(x1_test_converted[batch_start:batch_start + test_batch_size]), model.predict(x2_test_converted[batch_start:batch_start + test_batch_size])
-        similarity = cos_sim(x1_forward,x2_forward)
-        similarity = tf.reduce_mean(tf.abs(y_test[batch_start:batch_start + test_batch_size] - similarity))
-        epoch_test_loss+=similarity
-    print(f"Epoch #{epoch+1} Testing Loss: " + str(epoch_test_loss/n_test_batches))
+        x1_forward, x2_forward = model(x1_test_converted[batch_start:batch_start + test_batch_size]), model(
+            x2_test_converted[batch_start:batch_start + test_batch_size])
+        test_cos_sim = cos_sim(x1_forward, x2_forward)
+        test_labels = y_test[batch_start:batch_start + test_batch_size]
+        cos_sim_as_actual = tf.math.abs(test_labels - test_cos_sim)
+        test_batch_loss = tf.reduce_mean(cos_sim_as_actual)
+        epoch_test_loss += test_batch_loss
+    print(f"Epoch #{epoch + 1} Testing Loss: " + str(epoch_test_loss / n_test_batches))
     print()
