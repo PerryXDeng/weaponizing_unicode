@@ -5,8 +5,8 @@ import random
 import cv2 as cv
 
 FONTS_PATH = '../fonts/'
-FONT_SIZE = 0.4
-IMAGESIZE = 100
+FONT_SIZE = 0.2
+IMAGESIZE = 400
 
 def compile_datasets(dataset_size):
     infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
@@ -29,9 +29,9 @@ def compile_datasets(dataset_size):
         anchor_font = FONTS_PATH + supported_anchor_fonts[random.randint(0, len(supported_anchor_fonts) - 1)]
         positive_font = FONTS_PATH + supported_anchor_fonts[random.randint(0, len(supported_anchor_fonts) - 1)]
         negative_font = FONTS_PATH + supported_negative_fonts[random.randint(0, len(supported_negative_fonts) - 1)]
-        anchors[i] = draw_char.drawChar(IMAGESIZE, chr(anchor_char), FONT_SIZE, anchor_font)
-        positives[i] = draw_char.drawChar(IMAGESIZE, chr(anchor_char), FONT_SIZE, positive_font)
-        negatives[i] = draw_char.drawChar(IMAGESIZE, chr(negative_char), FONT_SIZE, negative_font)
+        anchors[i] = draw_char.transformImg(draw_char.drawChar(IMAGESIZE, chr(anchor_char), FONT_SIZE, anchor_font))
+        positives[i] = draw_char.transformImg(draw_char.drawChar(IMAGESIZE, chr(anchor_char), FONT_SIZE, positive_font))
+        negatives[i] = draw_char.transformImg(draw_char.drawChar(IMAGESIZE, chr(negative_char), FONT_SIZE, negative_font))
     return anchors, positives, negatives
 
 def test():
@@ -50,7 +50,7 @@ def test():
 
 
 if __name__ == '__main__':
-    dataset_size = 70000
+    dataset_size = 5000
     anchors, positives, negatives = compile_datasets(dataset_size)
     for i in range(dataset_size):
         cv.imshow('anchor',anchors[i])
