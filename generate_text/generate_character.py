@@ -18,7 +18,6 @@ def randomize_location(font_obj, chars, x_range, y_range, out_of_bounds_threshol
 
 def drawChar(img_size, chars, font_size, font_path, color=0):
     font = ImageFont.truetype(font_path, int(img_size * font_size))
-
     img_PIL = Image.fromarray(np.full((img_size, img_size), 255, dtype=np.uint8), mode='L')
     draw_PIL = ImageDraw.Draw(img_PIL)
     coordinates = randomize_location(font, chars, x_range=img_size, y_range=img_size)  # Top-left of character
