@@ -33,7 +33,8 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=400):
         negative_font = FONTS_PATH + supported_negative_fonts[random.randint(0, len(supported_negative_fonts) - 1)]
         anchors[i] = draw_char.transformImg(draw_char.drawChar(img_size, chr(anchor_char), font_size, anchor_font))
         positives[i] = draw_char.transformImg(draw_char.drawChar(img_size, chr(anchor_char), font_size, positive_font))
-        negatives[i] = draw_char.transformImg(draw_char.drawChar(img_size, chr(negative_char), font_size, negative_font))
+        negatives[i] = draw_char.transformImg(
+            draw_char.drawChar(img_size, chr(negative_char), font_size, negative_font))
     for i in range(test_size):
         x1_char = unicode_chars_available[random.randint(0, len(unicode_chars_available) - 1)]
         unicode_chars_available.remove(x1_char)
@@ -50,12 +51,9 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=400):
     return anchors, positives, negatives, x1_test, x2_test, y_test
 
 
-def test(font_size=.2, img_size=400):
+def test_drawing(unicode_mapping_dict, font_size=.2, img_size=400):
     # 17 corrupt unicode chars
     # 3600 invalid pixel size
-    infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
-    unicode_mapping_dict = pickle.load(infile)
-    infile.close()
     for i in unicode_mapping_dict.keys():
         try:
             a = random.randint(0, len(unicode_mapping_dict[i]) - 1)
@@ -66,13 +64,27 @@ def test(font_size=.2, img_size=400):
             print(e, i, unicode_mapping_dict[i][a])
 
 
-if __name__ == '__main__':
-    training_size = 500
-    test_size = 1000
-    anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(training_size, test_size)
-    for i in range(test_size):
+def display_chars(unicode_mapping_dict, display_test, display_train):
+    anchors, positives, negatives, x1_test, x2_test, y_test = unicode_mapping_dict
+    for i in range(display_train):
+        cv.imshow('anchor', anchors[i])
+        cv.imshow('positive', positives[i])
+        cv.imshow('negative', negatives[i])
+        cv.waitKey(0)
+        cv.destroyAllWindows()
+    for i in range(display_test):
         cv.imshow('x1', x1_test[i])
         cv.imshow('x2', x2_test[i])
         print(y_test[i])
         cv.waitKey(0)
         cv.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    # Generate the mapping file
+    infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+    unicode_mapping_dict = pickle.load(infile)
+    infile.close()
+
+    # display_chars(unicode_mapping_dict, 50,0)
+    # test_drawing(unicode_mapping_dict)
