@@ -82,9 +82,10 @@ def display_chars(unicode_mapping_dict, display_test, display_train):
 
 if __name__ == '__main__':
     # Generate the mapping file
-    infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
-    unicode_mapping_dict = pickle.load(infile)
-    infile.close()
+    dataset = compile_datasets(1000,1000)
 
-    # display_chars(unicode_mapping_dict, 50,0)
-    # test_drawing(unicode_mapping_dict)
+    # With OpenCV, display 50 testing pairs and 0 training triplets
+    # display_chars(dataset, 50,0)
+
+    # Tests drawing each unicode character with a random font
+    # test_drawing(dataset)
