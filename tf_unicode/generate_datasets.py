@@ -51,9 +51,12 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=400):
     return anchors, positives, negatives, x1_test, x2_test, y_test
 
 
-def test_drawing(unicode_mapping_dict, font_size=.2, img_size=400):
+def test_drawing(font_size=.2, img_size=400):
     # 17 corrupt unicode chars
     # 3600 invalid pixel size
+    infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+    unicode_mapping_dict = pickle.load(infile)
+    infile.close()
     for i in unicode_mapping_dict.keys():
         try:
             a = random.randint(0, len(unicode_mapping_dict[i]) - 1)
@@ -64,8 +67,8 @@ def test_drawing(unicode_mapping_dict, font_size=.2, img_size=400):
             print(e, i, unicode_mapping_dict[i][a])
 
 
-def display_chars(unicode_mapping_dict, display_test, display_train):
-    anchors, positives, negatives, x1_test, x2_test, y_test = unicode_mapping_dict
+def display_chars(display_train, display_test):
+    anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(display_train,display_test)
     for i in range(display_train):
         cv.imshow('anchor', anchors[i])
         cv.imshow('positive', positives[i])
@@ -81,11 +84,8 @@ def display_chars(unicode_mapping_dict, display_test, display_train):
 
 
 if __name__ == '__main__':
-    # Generate the mapping file
-    dataset = compile_datasets(1000,1000)
-
     # With OpenCV, display 50 testing pairs and 0 training triplets
-    # display_chars(dataset, 50,0)
+    display_chars(50,0)
 
     # Tests drawing each unicode character with a random font
-    # test_drawing(dataset)
+    test_drawing()
