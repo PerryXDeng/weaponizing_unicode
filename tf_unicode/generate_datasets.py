@@ -64,11 +64,12 @@ def test_drawing(font_size=.2, img_size=400):
             draw_char.transformImg(
                 draw_char.drawChar(img_size, chr(i), font_size, FONTS_PATH + unicode_mapping_dict[i][a]))
         except (ValueError, OSError) as e:
-            print(e, i, unicode_mapping_dict[i][a])
+            print(e, i, len(unicode_mapping_dict[i]))
 
 
-def display_chars(display_train, display_test):
-    anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(display_train,display_test)
+def display_chars(display_train, display_test, font_size=.2, img_size=400):
+    anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(display_train, display_test, font_size,
+                                                                               img_size)
     for i in range(display_train):
         cv.imshow('anchor', anchors[i])
         cv.imshow('positive', positives[i])
@@ -78,14 +79,13 @@ def display_chars(display_train, display_test):
     for i in range(display_test):
         cv.imshow('x1', x1_test[i])
         cv.imshow('x2', x2_test[i])
-        print(y_test[i])
         cv.waitKey(0)
         cv.destroyAllWindows()
 
 
 if __name__ == '__main__':
-    # With OpenCV, display 50 testing pairs and 0 training triplets
-    display_chars(50,0)
-
     # Tests drawing each unicode character with a random font
-    test_drawing()
+    #test_drawing(.4,200)
+
+    # With OpenCV, display 10 training triplets and 10 testing pairs
+    display_chars(10, 10, .4, 200)
