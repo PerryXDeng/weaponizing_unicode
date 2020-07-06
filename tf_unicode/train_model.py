@@ -3,7 +3,7 @@ import numpy as np
 import cv2 as cv
 import tensorflow as tf
 import tensorflow.keras as K
-import tf_unicode.generate_datasets as data_pipeline
+from tf_unicode.generate_datasets import compile_datasets
 import efficientnet.keras as efn
 
 parser = argparse.ArgumentParser()
@@ -64,7 +64,7 @@ def train(loss_function):
     # Training Loop
     for epoch in range(args.training_set_iterations):
         print("Processing data...")
-        anchors, positives, negatives, x1_test, x2_test, y_test = data_pipeline.compile_datasets(args.training_set_size,
+        anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(args.training_set_size,
                                                                                                  args.testing_set_size,
                                                                                                  font_size=args.font_size,
                                                                                                  img_size=args.img_size,
