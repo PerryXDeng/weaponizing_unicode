@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=5)
 parser.add_argument('-trss', '--training_set_size', action='store', type=int, default=500)
 parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=100)
-parser.add_argument('-bs', '--batch_size', action='store', type=int, default=128)
+parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
@@ -24,7 +24,7 @@ parser.add_argument('-lf', '--loss_function', action='store', type=str, default=
 
 parser.add_argument('-s', '--save_model', action='store', type=bool, default=False)
 parser.add_argument('-img', '--img_size', action='store', type=int, default=200)
-parser.add_argument('-font', '--font_size', action='store', type=float, default=.2)
+parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
 args = parser.parse_args()
 
 
@@ -44,7 +44,7 @@ def cos_triplet_loss(x1, x2, x3):
 
 
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
-def euc_triplet_loss(x1, x2, x3, c):
+def euc_triplet_loss(x1, x2, x3, c=100):
     # Epsilon included for numerical stability
     return tf.math.maximum(0, tf.reduce_mean(tf.norm((x1 - x2) + 1e-5) - tf.norm((x1 - x3) + 1e-5)) + c)
 
@@ -54,18 +54,21 @@ def train(loss_function=cos_triplet_loss):
                                input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                                pooling=args.pooling)
     # Training Settings
-    optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+    #optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+    optimizer = tf.keras.optimizers.Adam()
     training_iterations = args.training_set_size // args.batch_size
     testing_iterations = args.testing_set_size // 200
     # Training Loop
     for epoch in range(args.training_set_iterations):
+        print("Starting data")
         anchors, positives, negatives, x1_test, x2_test, y_test = data_pipeline.compile_datasets(args.training_set_size,
                                                                                                  args.testing_set_size,
                                                                                                  font_size=args.font_size,
-                                                                                                 img_size=args.img_size)
+                                                                                                 img_size=args.img_size,
+                                                                                                 color_format='RGB')
         training_set = tf.data.Dataset.from_tensor_slices((anchors, positives, negatives)).batch(args.batch_size,
                                                                                                  drop_remainder=True)
-
+        print("Data done")
         testing_set = tf.data.Dataset.from_tensor_slices((x1_test, x2_test, y_test)).batch(200, drop_remainder=True)
         epoch_train_loss = tf.convert_to_tensor(0, dtype=tf.float32)
         for training_batch in training_set:
@@ -73,6 +76,7 @@ def train(loss_function=cos_triplet_loss):
                 anchor_forward, positive_forward, negative_forward = model(training_batch[0]), model(
                     training_batch[1]), model(training_batch[2])
                 loss = loss_function(anchor_forward, positive_forward, negative_forward)
+                print(loss)
                 epoch_train_loss += loss
             # Get gradients of loss wrt the weights.
             gradients = tape.gradient(loss, model.trainable_weights)
