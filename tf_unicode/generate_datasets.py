@@ -1,4 +1,4 @@
-import generate_text.generate_character as draw_char
+from generate_character import transformImg, drawChar
 import pickle
 import numpy as np
 import random
@@ -7,7 +7,9 @@ import tensorflow as tf
 
 FONTS_PATH = '../fonts/'
 
-
+def __init__(self):
+  pass
+  
 def try_draw_char(char, available_fonts, empty_image, img_size, font_size):
     if len(available_fonts) == 0:
         # No fonts support drawing this unicode character, or the unicode character is corrupt!
@@ -15,7 +17,7 @@ def try_draw_char(char, available_fonts, empty_image, img_size, font_size):
     else:
         selected_font = available_fonts[random.randint(0, len(available_fonts) - 1)]
         try:
-            img = draw_char.transformImg(draw_char.drawChar(img_size, chr(char), font_size, FONTS_PATH + selected_font))
+            img = transformImg(drawChar(img_size, chr(char), font_size, FONTS_PATH + selected_font))
         except ValueError:
             # The drawn character is to big for the desired region!
             available_fonts.remove(selected_font)
@@ -114,8 +116,7 @@ def test_drawing(font_size=.2, img_size=200):
         try:
             a = random.randint(0, len(unicode_mapping_dict[i]) - 1)
             # print(a)
-            draw_char.transformImg(
-                draw_char.drawChar(img_size, chr(i), font_size, FONTS_PATH + unicode_mapping_dict[i][a]))
+            transformImg(drawChar(img_size, chr(i), font_size, FONTS_PATH + unicode_mapping_dict[i][a]))
         except (ValueError, OSError) as e:
             print(e, i, len(unicode_mapping_dict[i]))
 

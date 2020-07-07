@@ -3,7 +3,7 @@ import numpy as np
 import cv2 as cv
 import tensorflow as tf
 import tensorflow.keras as K
-from tf_unicode.generate_datasets import compile_datasets
+from generate_datasets import compile_datasets
 import efficientnet.keras as efn
 
 parser = argparse.ArgumentParser()
