@@ -5,8 +5,7 @@ For a detailed description of the attack, see https://blog.malwarebytes.com/101/
 Here is Unicode Consortium's current recommendations on dealing with such attacks: http://www.unicode.org/reports/tr39/#Confusable\_Detection.
 
 ## Current Progress
-We have implemented this variants of this one shot unsupervised learning 
-[model](https://www.cs.cmu.edu/~rsalakhu/papers/oneshot1.pdf) in numpy, 
+We have implemented various prototypical siamese and triplet networks in numpy, 
 tensorflow core, pytorch, and tensorflow 2. We have selected the tensorflow 2 implementation due to simplicity and keras integration.
 We have implemented a unicode generation scheme and a transferred EfficientNet with triplet cosine loss.
 We are in the process of trouble shooting the unicode generation scheme and implementing hyperparameter optimization.
