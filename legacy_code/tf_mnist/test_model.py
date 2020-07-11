@@ -1,7 +1,7 @@
-import tf_mnist.generate_datasets as gd
+import legacy_code.tf_mnist.generate_datasets as gd
 import tensorflow.keras as K
 import tensorflow as tf
-import tf_mnist.train_model as Utils
+import legacy_code.tf_mnist.train_model as Utils
 import numpy as np
 
 

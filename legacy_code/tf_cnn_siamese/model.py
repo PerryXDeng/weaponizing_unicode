@@ -1,4 +1,4 @@
-import tf_cnn_siamese.configurations as conf
+import legacy_code.tf_cnn_siamese.configurations as conf
 import tensorflow as tf
 import numpy as np
 

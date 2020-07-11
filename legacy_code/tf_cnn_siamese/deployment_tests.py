@@ -1,5 +1,5 @@
-from tf_cnn_siamese.model import *
-import tf_cnn_siamese.data_preparation as dp
+from legacy_code.tf_cnn_siamese.model import *
+import legacy_code.tf_cnn_siamese.data_preparation as dp
 import time
 import sys
 

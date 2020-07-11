@@ -1,6 +1,6 @@
-import simple_siamese.hyperparameters as hp
-import simple_siamese.input_generator as fd
-import simple_siamese.backpropagation_numpy as nb
+import legacy_code.simple_siamese.hyperparameters as hp
+import legacy_code.simple_siamese.input_generator as fd
+import legacy_code.simple_siamese.backpropagation_numpy as nb
 
 import numpy as np
 

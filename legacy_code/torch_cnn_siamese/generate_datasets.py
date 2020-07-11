@@ -1,7 +1,7 @@
 import tensorflow as tf
 import torch
 import numpy as np
-import torch_cnn_siamese.config as conf
+import legacy_code.torch_cnn_siamese.config as conf
 import random
 
 

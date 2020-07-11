@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 import time
 import numpy as np
-from torch_cnn_siamese.generate_datasets import get_mnist_dataset
-from torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, THRESHOLD, LAMBDA, DECAY_RATE
+from legacy_code.torch_cnn_siamese.generate_datasets import get_mnist_dataset
+from legacy_code.torch_cnn_siamese.config import BATCH_SIZE, EPOCHS_PER_VALIDATION, THRESHOLD, LAMBDA, DECAY_RATE
 
 
 # Argument parsing for CMD

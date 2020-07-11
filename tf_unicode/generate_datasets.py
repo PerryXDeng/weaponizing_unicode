@@ -34,6 +34,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
     empty_image = np.full((img_size, img_size), 255)
     infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
     unicode_mapping_dict = pickle.load(infile)
+    infile.close() # Perry: it's programming best practice to close such file pointers, or use Python with syntax
     # 63609 63656 TODO TODO TODO TODO
     unicode_count = len(unicode_mapping_dict)
     infile.close()

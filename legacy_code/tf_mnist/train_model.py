@@ -1,6 +1,6 @@
 import efficientnet.keras as efn
 import numpy as np
-import tf_mnist.generate_datasets as gd
+import legacy_code.tf_mnist.generate_datasets as gd
 import cv2 as cv
 import tensorflow as tf
 import tensorflow.keras as K

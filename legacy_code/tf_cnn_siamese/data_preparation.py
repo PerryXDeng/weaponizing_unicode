@@ -1,9 +1,9 @@
-import tf_cnn_siamese.configurations as conf
-import tf_mnist.generate_datasets as tfdata
+import legacy_code.tf_cnn_siamese.configurations as conf
+import legacy_code.tf_mnist.generate_datasets as tfdata
 import tensorflow as tf
 import numpy as np
 import fonts.fonts_info as unicodes
-import generate_text.generate_character as generator
+import legacy_code.generate_text.generate_character as generator
 
 
 def training_inputs_placeholders():
