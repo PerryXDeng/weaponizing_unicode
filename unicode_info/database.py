@@ -20,6 +20,15 @@ __UnicodeMap = List[str]
 
 UNDEFINED_BLOCK = "undefined" # for indicating that a character is not defined
 
+
+def download_and_parse_unicode_clusters() -> list:
+  """
+  https://www.unicode.org/Public/security/latest/confusables.txt
+  :return: {lists of lists of unicode codepoints ints corresponding to clusters}
+  """
+  raise NotImplementedError
+
+
 def _is_character_block(block_name: str) -> bool:
   """
   checks if block implements actual characters

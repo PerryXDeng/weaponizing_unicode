@@ -10,4 +10,5 @@ pip install Pillow
 pip install scikit-image
 pip install efficientnet
 pip install Keras-Applications
+pip install cupy
 deactivate
