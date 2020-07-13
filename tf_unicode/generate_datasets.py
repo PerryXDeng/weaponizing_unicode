@@ -9,7 +9,8 @@ FONTS_PATH = '../fonts/'
 
 def __init__(self):
   pass
-  
+
+# TODO: check for replacement drawing
 def try_draw_char(char, available_fonts, empty_image, img_size, font_size):
     if len(available_fonts) == 0:
         # No fonts support drawing this unicode character, or the unicode character is corrupt!
@@ -35,7 +36,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
     infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
     unicode_mapping_dict = pickle.load(infile)
     infile.close() # Perry: it's programming best practice to close such file pointers, or use Python with syntax
-    # 63609 63656 TODO TODO TODO TODO
+    # 63609 63656 TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
     unicode_count = len(unicode_mapping_dict)
     infile.close()
     unicode_chars_available = list(unicode_mapping_dict.keys())

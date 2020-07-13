@@ -85,6 +85,7 @@ def _find_nontrivial_components_from_adjacency_matrix(adj_mat:np.ndarray) -> lis
   return connected_components
 
 
+# TODO: adjacency matrix methods might overflow GPU memory on large number of features
 class _AbstractGraphClusterer(_AbstractFeatureClusterer):
   """
   cluster unicodes

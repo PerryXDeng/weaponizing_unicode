@@ -28,7 +28,7 @@ parser.add_argument('-font', '--font_size', action='store', type=float, default=
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
 args = parser.parse_args()
 
-
+# TODO change einsum to matrix multiplication methods
 def einsum(a, b):
     return tf.einsum('ij,ij->i', a, b)
 
