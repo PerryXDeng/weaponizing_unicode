@@ -7,10 +7,7 @@ import tensorflow as tf
 
 FONTS_PATH = '../fonts/'
 
-def __init__(self):
-  pass
-
-# TODO: check for replacement drawing
+# TODO: check for replacement drawing i.e. 63609 63656
 def try_draw_char(char, available_fonts, empty_image, img_size, font_size):
     if len(available_fonts) == 0:
         # No fonts support drawing this unicode character, or the unicode character is corrupt!
@@ -36,7 +33,8 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
     infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
     unicode_mapping_dict = pickle.load(infile)
     infile.close() # Perry: it's programming best practice to close such file pointers, or use Python with syntax
-    # 63609 63656 TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
+    # TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
+    # Return dictionary of unsupported characters
     unicode_count = len(unicode_mapping_dict)
     infile.close()
     unicode_chars_available = list(unicode_mapping_dict.keys())
@@ -144,4 +142,4 @@ if __name__ == '__main__':
     # test_drawing(.4,200)
 
     # With OpenCV, display 10 training triplets and 5 testing pairs
-    display_chars(100, 100, .4, 200)
+    display_chars(100, 100, .4, 100)
