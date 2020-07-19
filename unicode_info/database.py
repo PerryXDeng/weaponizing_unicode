@@ -21,10 +21,11 @@ __UnicodeMap = List[str]
 UNDEFINED_BLOCK = "undefined" # for indicating that a character is not defined
 
 
-def download_and_parse_unicode_clusters() -> list:
+# TODO: implement this
+def download_and_parse_unicode_clusters() -> dict:
   """
   https://www.unicode.org/Public/security/latest/confusables.txt
-  :return: {lists of lists of unicode codepoints ints corresponding to clusters}
+  :return: {cluster_id: list of unicode codepoints}
   """
   raise NotImplementedError
 
