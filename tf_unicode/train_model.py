@@ -7,22 +7,22 @@ from generate_datasets import compile_datasets
 import efficientnet.keras as efn
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=5)
+parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=6)
 parser.add_argument('-trss', '--training_set_size', action='store', type=int, default=500)
 parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=1)
-parser.add_argument('-bs', '--batch_size', action='store', type=int, default=8)
+parser.add_argument('-bs', '--batch_size', action='store', type=int, default=64)
 
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
 
-parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.01)
+parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.001)
 
 # Vector comparison method
 # Options: cos, euc
 parser.add_argument('-lf', '--loss_function', action='store', type=str, default='cos')
 
-parser.add_argument('-s', '--save_model', action='store', type=bool, default=True)
+parser.add_argument('-s', '--save_model', action='store', type=bool, default=False)
 parser.add_argument('-img', '--img_size', action='store', type=int, default=100)
 parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
@@ -64,7 +64,7 @@ def data_preprocess(data):
 
 
 def train(loss_function):
-    model = efn.EfficientNetB4(weights='imagenet',
+    model = efn.EfficientNetB3(weights='imagenet',
                                input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                                pooling=args.pooling)
     # Training Settings
@@ -91,6 +91,7 @@ def train(loss_function):
                 neg = negatives[batch_start:batch_start + args.batch_size]
                 anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
                 loss = loss_function(anchor_forward, positive_forward, negative_forward)
+                print(loss.numpy())
                 epoch_train_loss += loss.numpy()
             # Get gradients of loss wrt the weights.
             gradients = tape.gradient(loss, model.trainable_weights)
@@ -107,9 +108,9 @@ def train(loss_function):
         #     test_batch_loss = tf.reduce_mean(cos_sim_as_actual)
         #     epoch_test_loss += test_batch_loss
         avg_epoch_train_loss = (epoch_train_loss / training_iterations)
-        avg_epoch_test_loss = (epoch_test_loss / testing_iterations)
+        #avg_epoch_test_loss = (epoch_test_loss / testing_iterations)
         print(f"Epoch #{epoch + 1} Training Loss: " + str(avg_epoch_train_loss))
-        print(f"Epoch #{epoch + 1} Testing Loss: " + str(avg_epoch_test_loss))
+        #print(f"Epoch #{epoch + 1} Testing Loss: " + str(avg_epoch_test_loss))
         print()
 
     # serialize model to JSON
