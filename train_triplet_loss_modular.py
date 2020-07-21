@@ -12,8 +12,8 @@ from utilities import allow_gpu_memory_growth, initialize_ckpt_saver, initialize
 parser = argparse.ArgumentParser()
 _init_time = datetime.datetime.now()
 parser.add_argument('-tri', '--train_iterations', action='store', type=int, default=5000)
-parser.add_argument('-bs', '--batch_size', action='store', type=int, default=8)
-parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=1200)
+parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
+parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=2000)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='--logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
@@ -26,7 +26,7 @@ parser.add_argument('-lr', '--learning_rate', action='store', type=float, defaul
 
 # Vector comparison method
 # Options: cos, euc
-parser.add_argument('-lf', '--loss_function', action='store', type=str, default='cos')
+parser.add_argument('-lf', '--loss_function', action='store', type=str, default='euc')
 parser.add_argument('-img', '--img_size', action='store', type=int, default=100)
 parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
@@ -51,7 +51,7 @@ def cos_triplet_loss(x1, x2, x3, epsilon):
 @tf.function
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
 def euc_triplet_loss(x1, x2, x3, epsilon):
-  return tf.reduce_mean(tf.norm(x1 - x2) - tf.norm(x1 - x3))
+  return tf.reduce_mean(tf.norm(x1 - x2, axis=1) - tf.norm(x1 - x3, axis=1))
 
 
 @tf.function
@@ -126,7 +126,7 @@ def train():
     measure_function = cos_sim
   elif args.loss_function == 'euc':
     loss_function = euc_triplet_loss
-    measure_function = lambda a, b, epsilon: tf.norm(a - b)
+    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
   else:
     loss_function = None
     measure_function = None
