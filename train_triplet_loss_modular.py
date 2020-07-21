@@ -144,8 +144,8 @@ def train():
   # Training Loop
   reporting_interval = 1
   test_iterations = args.test_sample_size // args.test_batch_size
+  restore_checkpoint_if_avail(saver, ckpt_manager)
   for i in range(args.train_iterations // reporting_interval):
-    restore_checkpoint_if_avail(saver, ckpt_manager)
     mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval, saver,
                                    args.debug_nan)
     print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
