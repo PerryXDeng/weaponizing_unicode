@@ -16,7 +16,7 @@ parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=4000)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
-                    default='--logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
+                    default='logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
                                              _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
 parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=True)
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
