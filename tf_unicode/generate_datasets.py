@@ -186,7 +186,11 @@ class IdenticalPairIterable(AbstractUnicodeRendererIterable):
 
 
 class RandomPairIterable(AbstractUnicodeRendererIterable):
-
+  """
+  # TODO currently the override draws with replacement.
+  # TODO ideally for the false positive rate we want to draw without replacement, pairwise (not character wise)
+  supply "override_unicode_population" for false positive rate calculation
+  """
   def __init__(self, img_size: int, font_size: int, font_dict_path: str="../fonts/multifont_mapping.pkl", rgb: bool=True,
                  override_unicode_population: dict = None):
       super().__init__(img_size, font_size, font_dict_path, rgb)
@@ -270,7 +274,7 @@ def get_triplet_tf_dataset(img_size: int, font_size: int, font_dict_path: str=".
   :param preprocess_fn: 
   :param batch_size: 
   :param buffer_size: 
-  :return: tensors that are automatically repopulated with new data
+  :return: dataset iterable
   """
   if rgb:
     img_shape = [img_size, img_size, 3]
@@ -298,7 +302,7 @@ def get_balanced_pair_tf_dataset(img_size: int, font_size: float, font_dict_path
   :param preprocess_fn: 
   :param batch_size: 
   :param buffer_size: 
-  :return: tensors that are automatically repopulated with new data
+  :return: dataset iterable
   """
   if rgb:
     img_shape = [img_size, img_size, 3]
@@ -326,7 +330,7 @@ def get_identical_pair_tf_dataset(img_size: int, font_size: int, font_dict_path:
   :param preprocess_fn: 
   :param batch_size: 
   :param buffer_size: 
-  :return: tensors that are automatically repopulated with new data
+  :return: dataset iterable
   """
   if rgb:
     img_shape = [img_size, img_size, 3]
@@ -354,7 +358,7 @@ def get_random_pair_tf_dataset(img_size: int, font_size: int, font_dict_path: st
   :param preprocess_fn:
   :param batch_size:
   :param buffer_size:
-  :return: tensors that are automatically repopulated with new data
+  :return: dataset iterable
   """
   if rgb:
     img_shape = [img_size, img_size, 3]
