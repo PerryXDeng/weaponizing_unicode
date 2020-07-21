@@ -1,11 +1,10 @@
 import argparse
 import numpy as np
 import tensorflow as tf
-import tensorflow.keras as K
 import efficientnet.tfkeras as efn
 from sklearn.linear_model import LogisticRegression
 from generate_datasets import compile_datasets
-from gpu_compat_utilities import allow_growth
+from utilities import allow_gpu_memory_growth
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=1)
@@ -69,7 +68,7 @@ def data_preprocess(data):
     
 
 def train(loss_function, vector_comparison):
-    allow_growth() 
+    allow_gpu_growth()
     model = efn.EfficientNetB3(weights='imagenet',
                                input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                                pooling=args.pooling)
