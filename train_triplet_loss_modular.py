@@ -12,8 +12,8 @@ from utilities import allow_gpu_memory_growth, initialize_ckpt_saver, initialize
 parser = argparse.ArgumentParser()
 _init_time = datetime.datetime.now()
 parser.add_argument('-tri', '--train_iterations', action='store', type=int, default=5000)
-parser.add_argument('-ti', '--test_iterations', action='store', type=int, default=1)
 parser.add_argument('-bs', '--batch_size', action='store', type=int, default=8)
+parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=1200)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='--logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
@@ -120,6 +120,7 @@ def test_for_num_step(measure_fn, model, pairwise_dataset, num_steps, epsilon):
 
 
 def train():
+  allow_gpu_memory_growth()
   if args.loss_function == 'cos':
     loss_function = cos_triplet_loss
     measure_function = cos_sim
@@ -141,14 +142,15 @@ def train():
                                             batch_size=args.batch_size)
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size)
   # Training Loop
-  test_interval = 1
-  for i in range(args.train_iterations // test_interval):
+  reporting_interval = 1
+  test_iterations = args.test_sample_size // args.test_batch_size
+  for i in range(args.train_iterations // reporting_interval):
     restore_checkpoint_if_avail(saver, ckpt_manager)
-    mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, test_interval, saver,
+    mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval, saver,
                                    args.debug_nan)
-    print(f'Step {i * test_interval + 1} Mean Loss: {mean_loss}')
-    acc = test_for_num_step(measure_function, model, pairs_dataset, args.test_iterations, args.epsilon)
-    print(f"Step {i * test_interval + 1} Testing Acc.: {acc}")
+    print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
+    acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
     save_checkpoint(ckpt_manager)
 
   print()
