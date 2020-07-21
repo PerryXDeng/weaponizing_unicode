@@ -16,9 +16,11 @@ parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=4000)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
-                    default='--logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
+                    default='logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
                                              _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
+parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=1)
 parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=True)
+parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, default=False)
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
@@ -143,7 +145,7 @@ def train():
                                             batch_size=args.batch_size)
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,preprocess_fn=preprocess_pairs)
   # Training Loop
-  reporting_interval = 1
+  reporting_interval = args.reporting_interval
   test_iterations = args.test_sample_size // args.test_batch_size
   restore_checkpoint_if_avail(saver, ckpt_manager)
   for i in range(args.train_iterations // reporting_interval):
@@ -152,7 +154,8 @@ def train():
     print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
     acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
-    save_checkpoint(ckpt_manager)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
 
   print()
 
