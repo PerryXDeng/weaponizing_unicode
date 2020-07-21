@@ -20,6 +20,7 @@ parser.add_argument('-dir', '--log_dir', action='store', type=str,
                                              _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
 parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=1)
 parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=True)
+parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, default=False)
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
@@ -153,7 +154,8 @@ def train():
     print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
     acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
-    save_checkpoint(ckpt_manager)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
 
   print()
 
