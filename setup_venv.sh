@@ -12,4 +12,5 @@ pip install scikit-image
 pip install efficientnet
 pip install Keras-Applications
 pip install cupy
+pip install -U scikit-learn
 deactivate

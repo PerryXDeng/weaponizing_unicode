@@ -5,11 +5,12 @@ import tensorflow as tf
 import tensorflow.keras as K
 from generate_datasets import compile_datasets
 import efficientnet.keras as efn
+from sklearn.linear_model import LogisticRegression
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=6)
 parser.add_argument('-trss', '--training_set_size', action='store', type=int, default=500)
-parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=1)
+parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=2000)
 parser.add_argument('-bs', '--batch_size', action='store', type=int, default=64)
 
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
@@ -61,26 +62,25 @@ def euc_triplet_loss(x1, x2, x3, c=1000):
 
 def data_preprocess(data):
     return tf.convert_to_tensor((data - (255 / 2)) / (255 / 2), dtype=tf.float32)
-
+    
 
 def train(loss_function):
-    model = efn.EfficientNetB3(weights='imagenet',
+    model = efn.EfficientNetB5(weights='imagenet',
                                input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                                pooling=args.pooling)
     # Training Settings
-    optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+    optimizer = tf.keras.optimizers.Adam()
     training_iterations = args.training_set_size // args.batch_size
-    testing_iterations = args.testing_set_size // 200
     # Training Loop
     for epoch in range(args.training_set_iterations):
         print("Processing data...")
         anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(args.training_set_size,
-                                                                                   args.testing_set_size,
+                                                                                   1,
                                                                                    font_size=args.font_size,
                                                                                    img_size=args.img_size,
                                                                                    color_format='RGB')
-        anchors, positives, negatives, x1_test, x2_test = data_preprocess(anchors), data_preprocess(
-            positives), data_preprocess(negatives), data_preprocess(x1_test), data_preprocess(x2_test)
+        anchors, positives, negatives = data_preprocess(anchors), data_preprocess(
+            positives), data_preprocess(negatives)
         print("Done")
         epoch_train_loss = 0
         for train_batch in range(training_iterations):
@@ -97,28 +97,29 @@ def train(loss_function):
             gradients = tape.gradient(loss, model.trainable_weights)
             # Update the weights of the model.
             optimizer.apply_gradients(zip(gradients, model.trainable_weights))
-        epoch_test_loss = 0
-        # for test_batch in range(testing_iterations):
-        #     batch_start = 200 * test_batch
-        #     x1_forward, x2_forward = model(x1_test[batch_start:batch_start + 200]), model(
-        #         x2_test[batch_start:batch_start + 200])
-        #     test_cos_sim = cos_sim(x1_forward, x2_forward)
-        #     test_labels = y_test[batch_start:batch_start + 200]
-        #     cos_sim_as_actual = tf.math.abs(test_labels - test_cos_sim)
-        #     test_batch_loss = tf.reduce_mean(cos_sim_as_actual)
-        #     epoch_test_loss += test_batch_loss
         avg_epoch_train_loss = (epoch_train_loss / training_iterations)
-        #avg_epoch_test_loss = (epoch_test_loss / testing_iterations)
         print(f"Epoch #{epoch + 1} Training Loss: " + str(avg_epoch_train_loss))
-        #print(f"Epoch #{epoch + 1} Testing Loss: " + str(avg_epoch_test_loss))
         print()
 
-    # serialize model to JSON
-    model_json = model.to_json()
-    with open("model/model.json", "w") as json_file:
-        json_file.write(model_json)
-    # serialize weights to HDF5
-    model.save_weights("model/model.h5")
+    if(args.save_model):
+      # serialize model to JSON
+      model_json = model.to_json()
+      with open("model/model.json", "w") as json_file:
+          json_file.write(model_json)
+      # serialize weights to HDF5
+      model.save_weights("model/model.h5")
+    
+    anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(1,
+                                                                           args.testing_set_size,
+                                                                           font_size=args.font_size,
+                                                                           img_size=args.img_size,
+                                                                           color_format='RGB')
+    x1_test, x2_test = data_preprocess(x1_test), data_preprocess(x2_test)
+    x1_test_forward, x2_test_forward = model(x1_test,training=False), model(x2_test,training=False)
+    test_cos_sim = (cos_sim(x1_test_forward,x2_test_forward).numpy()).reshape(-1,1)
+    prediction_model = LogisticRegression(random_state=0).fit(test_cos_sim, y_test)
+    print(prediction_model.score(test_cos_sim,y_test))
+
 
 
 if __name__ == '__main__':
