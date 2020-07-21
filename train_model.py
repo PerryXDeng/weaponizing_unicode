@@ -4,27 +4,29 @@ import tensorflow as tf
 import efficientnet.tfkeras as efn
 from sklearn.linear_model import LogisticRegression
 from generate_datasets import compile_datasets
-from utilities import allow_gpu_memory_growth
+from utilities import allow_gpu_memory_growth, initialize_ckpt_saver, initialize_ckpt_manager, save_checkpoint, \
+  restore_checkpoint_if_avail, \
+  save_keras_model_weights
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-trsi', '--training_set_iterations', action='store', type=int, default=1)
-parser.add_argument('-trss', '--training_set_size', action='store', type=int, default=1500)
-parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=2000)
-parser.add_argument('-bs', '--batch_size', action='store', type=int, default=128)
+parser.add_argument('-trss', '--training_set_size', action='store', type=int, default=500)
+parser.add_argument('-tess', '--testing_set_size', action='store', type=int, default=4000)
+parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
-
-parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.001)
+# .0001-.001
+parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.0005)
 
 # Vector comparison method
 # Options: cos, euc
-parser.add_argument('-lf', '--loss_function', action='store', type=str, default='euc')
+parser.add_argument('-lf', '--loss_function', action='store', type=str, default='cos')
 
 parser.add_argument('-s', '--save_model', action='store', type=bool, default=False)
 parser.add_argument('-img', '--img_size', action='store', type=int, default=100)
-parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
+parser.add_argument('-font', '--font_size', action='store', type=float, default=.6)
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
 args = parser.parse_args()
 
@@ -54,26 +56,23 @@ def cos_triplet_loss(x1, x2, x3):
     return (tf.reduce_mean((cos_sim(x1, x3) - cos_sim(x1, x2))) + 2) / 4
 
 
-def euc_distance(x1,x2):
-    return tf.norm(x1-x2,axis=1)
-
+@tf.function
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
 def euc_triplet_loss(x1, x2, x3):
-    x_ = euc_distance(x1,x2) - euc_distance(x1,x3)
-    return tf.reduce_mean(x_)
-
+  return tf.reduce_mean(tf.norm(x1 - x2, axis=1) - tf.norm(x1 - x3, axis=1))
+  
 
 def data_preprocess(data):
     return tf.convert_to_tensor((data - (255 / 2)) / (255 / 2), dtype=tf.float32)
     
 
 def train(loss_function, vector_comparison):
-    allow_gpu_growth()
-    model = efn.EfficientNetB3(weights='imagenet',
+    allow_gpu_memory_growth()
+    model = efn.EfficientNetB4(weights='imagenet',
                                input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                                pooling=args.pooling)
     # Training Settings
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam(learning_rate=.0005)
     training_iterations = args.training_set_size // args.batch_size
     # Training Loop
     for epoch in range(args.training_set_iterations):
@@ -112,20 +111,24 @@ def train(loss_function, vector_comparison):
           json_file.write(model_json)
       # serialize weights to HDF5
       model.save_weights("model/model.h5")
-    
+    print("Processing data...")
     anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(1,
                                                                            args.testing_set_size,
                                                                            font_size=args.font_size,
                                                                            img_size=args.img_size,
                                                                            color_format='RGB')
+    print("Done")
+    values = np.asarray([])
+    test_batch_size = 32
     x1_test, x2_test = data_preprocess(x1_test), data_preprocess(x2_test)
-    x1_test_forward, x2_test_forward = model(x1_test,training=False), model(x2_test,training=False)
-    test_distance = (euc_distance(x1_test_forward,x2_test_forward).numpy()).reshape(-1,1)
-    print(test_distance.shape)
-    print(y_test.shape)
-    prediction_model = LogisticRegression(random_state=0).fit(test_distance, y_test)
-    print(prediction_model.score(test_distance,y_test))
-
+    for i in range(args.testing_set_size//test_batch_size):
+      x1_test_forward, x2_test_forward = model(x1_test[i*test_batch_size:(i*test_batch_size)+test_batch_size],training=False), model(x2_test[i*test_batch_size:(i*test_batch_size)+test_batch_size],training=False)
+      test_distance = vector_comparison(x1_test_forward,x2_test_forward).numpy()
+      values = np.append(values,test_distance)
+    values = values.reshape(-1,1)
+    regression_fitter = LogisticRegression(penalty='none', random_state=0, solver='saga')
+    regression_fitter.fit(values, y_test)
+    return regression_fitter.score(values, y_test)
 
 
 if __name__ == '__main__':
@@ -134,5 +137,5 @@ if __name__ == '__main__':
         vector_comparison = cos_sim
     elif args.loss_function == 'euc':
         loss_function = euc_triplet_loss
-        vector_comparison = euc_distance
-    train(loss_function=loss_function,vector_comparison=vector_comparison)
+        vector_comparison = lambda a, b: tf.norm(a - b, axis=1)
+    print(train(loss_function=loss_function,vector_comparison=vector_comparison))

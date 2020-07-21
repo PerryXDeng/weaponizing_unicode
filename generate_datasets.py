@@ -53,7 +53,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
   negatives = np.empty(train_img_shape, dtype=np.uint8)
   x1_test = np.empty(test_img_shape, dtype=np.uint8)
   x2_test = np.empty(test_img_shape, dtype=np.uint8)
-  y_test = np.arange(test_size, dtype=np.uint8)
+  y_test = np.arange(test_size, dtype=np.uint8)%2
   for i in range(training_size):
     anchor_img = empty_image
     negative_img = empty_image
