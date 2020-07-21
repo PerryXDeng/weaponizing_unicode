@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser()
 _init_time = datetime.datetime.now()
 parser.add_argument('-tri', '--train_iterations', action='store', type=int, default=5000)
 parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
-parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=2000)
+parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=4000)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='--logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
@@ -22,11 +22,11 @@ parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=Tru
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
-parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.01)
+parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.001)
 
 # Vector comparison method
 # Options: cos, euc
-parser.add_argument('-lf', '--loss_function', action='store', type=str, default='euc')
+parser.add_argument('-lf', '--loss_function', action='store', type=str, default='cos')
 parser.add_argument('-img', '--img_size', action='store', type=int, default=100)
 parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
@@ -130,17 +130,18 @@ def train():
   else:
     loss_function = None
     measure_function = None
-  model = efn.EfficientNetB4(weights='imagenet',
+  model = efn.EfficientNetB3(weights='imagenet',
                              input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
                              pooling=args.pooling)
   # Training Settings
   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-  preprocess_fn = lambda x, y, z: (normalize_img(x), normalize_img(y), z)
-  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_fn,
+  preprocess_triplets = lambda x, y, z: (normalize_img(x), normalize_img(y), normalize_img(z))
+  preprocess_pairs = lambda x, y, z: (normalize_img(x), normalize_img(y), z)
+  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
                                             batch_size=args.batch_size)
-  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size)
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,preprocess_fn=preprocess_pairs)
   # Training Loop
   reporting_interval = 1
   test_iterations = args.test_sample_size // args.test_batch_size
