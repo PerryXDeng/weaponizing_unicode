@@ -343,12 +343,9 @@ def display_chars(display_train, display_test, font_size=.2, img_size=200):
                                                                              img_size, color_format='RGB')
   for i in range(display_train):
     print(anchors[i].dtype)
-    cv.imshow('anchor_uint8', anchors[i])
-    cv.imshow('positive_uint8', positives[i])
-    cv.imshow('negative_uint8', negatives[i])
-    cv.imshow('anchor_float32', anchors[i])
-    cv.imshow('positive_float32', positives[i])
-    cv.imshow('negative_float32', negatives[i])
+    cv.imshow('anchor', anchors[i])
+    cv.imshow('positive', positives[i])
+    cv.imshow('negative', negatives[i])
     cv.waitKey(0)
     cv.destroyAllWindows()
   for i in range(display_test):
@@ -394,7 +391,7 @@ if __name__ == '__main__':
   # test_drawing(.4,200)
   test_try_drawing()
   # With OpenCV, display 10 training triplets and 5 testing pairs
-  # display_chars(100, 100, .4, 100)
+  #display_chars(10, 10, .6, 200)
 
   # test Dataset
   # display_triplets_data_sample()
