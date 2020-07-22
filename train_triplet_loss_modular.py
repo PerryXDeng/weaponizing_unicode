@@ -57,7 +57,8 @@ def euc_triplet_loss(x1, x2, x3, epsilon):
 
 
 @tf.function
-def normalize_img(data):
+def floatify_and_normalize(data):
+  data = tf.cast(data, tf.float32)
   return (data - (255 / 2)) / (255 / 2)
 
 
@@ -139,8 +140,8 @@ def train():
   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-  preprocess_triplets = lambda x, y, z: (normalize_img(x), normalize_img(y), normalize_img(z))
-  preprocess_pairs = lambda x, y, z: (normalize_img(x), normalize_img(y), z)
+  preprocess_triplets = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
   triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
                                             batch_size=args.batch_size)
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,preprocess_fn=preprocess_pairs)
