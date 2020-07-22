@@ -17,14 +17,14 @@ parser.add_argument('-ts', '--test_sample_size', action='store', type=int, defau
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
-                                             _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
+                                           _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
 parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=1)
 parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=True)
 parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, default=False)
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
-parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.001)
+parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.0005)
 
 # Vector comparison method
 # Options: cos, euc
@@ -46,14 +46,14 @@ def cos_sim(x1, x2, epsilon):
 
 @tf.function
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
-def cos_triplet_loss(x1, x2, x3, epsilon):
-  return (tf.reduce_mean((cos_sim(x1, x3, epsilon) - cos_sim(x1, x2, epsilon))) + 2) / 4
+def cos_triplet_loss(anc, pos, neg, epsilon):
+  return (tf.reduce_mean((cos_sim(anc, neg, epsilon) - cos_sim(anc, pos, epsilon))) + 2) / 4
 
 
 @tf.function
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
-def euc_triplet_loss(x1, x2, x3, epsilon):
-  return tf.reduce_mean(tf.norm(x1 - x2, axis=1) - tf.norm(x1 - x3, axis=1))
+def euc_triplet_loss(anc, pos, neg, epsilon):
+  return tf.reduce_mean(tf.norm(anc - pos, axis=1) - tf.norm(anc - neg, axis=1))
 
 
 @tf.function
@@ -62,7 +62,7 @@ def floatify_and_normalize(data):
   return (data - (255 / 2)) / (255 / 2)
 
 
-def train_for_num_step(loss_fn, model, optimizer, triplet_dataset, epsilon, num_steps, saver, debug_nan):
+def train_for_num_step(loss_fn, model, optimizer, triplet_dataset, epsilon, num_steps, debug_nan):
   """
 
   :param loss_fn: function
@@ -71,7 +71,6 @@ def train_for_num_step(loss_fn, model, optimizer, triplet_dataset, epsilon, num_
   :param triplet_dataset: 
   :param epsilon:
   :param num_steps:
-  :param saver: instance of tf.train.Checkpoint
   :param debug_nan: bool
   :return: mean loss
   """
@@ -89,10 +88,10 @@ def train_for_num_step(loss_fn, model, optimizer, triplet_dataset, epsilon, num_
     # Update the weights of the model.
     grad_check = None
     if debug_nan:
-      grad_check = [tf.debugging.check_numerics(g, message='Gradient NaN Found!!!') for g in gradients if g is not None] + [tf.debugging.check_numerics(loss, message="Loss NaN Found!!!")]
+      grad_check = [tf.debugging.check_numerics(g, message='Gradient NaN Found!!!') for g in gradients if
+                    g is not None] + [tf.debugging.check_numerics(loss, message="Loss NaN Found!!!")]
     with tf.control_dependencies(grad_check):
       optimizer.apply_gradients(zip(gradients, model.trainable_weights))
-  saver.step.assign_add(num_steps)
   return loss_sum / num_steps
 
 
@@ -138,23 +137,30 @@ def train():
                              pooling=args.pooling)
   # Training Settings
   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-  preprocess_triplets = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+
+  preprocess_triplets = lambda x, y, z: (
+      floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
   preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
+
   triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
                                             batch_size=args.batch_size)
-  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,preprocess_fn=preprocess_pairs)
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
+                                               preprocess_fn=preprocess_pairs)
+
   # Training Loop
   reporting_interval = args.reporting_interval
   test_iterations = args.test_sample_size // args.test_batch_size
   restore_checkpoint_if_avail(saver, ckpt_manager)
   for i in range(args.train_iterations // reporting_interval):
-    mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval, saver,
+    mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
                                    args.debug_nan)
     print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
     acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
+    saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
 

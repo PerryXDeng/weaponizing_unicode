@@ -125,7 +125,7 @@ class AbstractUnicodeRendererIterable(Iterator):
   def __init__(self, img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
                rgb: bool = True):
     self.img_size = img_size
-    self.empty_image = np.full((img_size, img_size), 255)
+    self.empty_image = np.full((img_size, img_size), 255, dtype=np.uint8)
     with open(font_dict_path, 'rb') as fp:
       self.unicode_mapping_dict = pickle.load(fp)
     self.codepoints = list(self.unicode_mapping_dict.keys())
@@ -169,61 +169,7 @@ class TripletIterable(AbstractUnicodeRendererIterable):
       anchor_img = cv.cvtColor(anchor_img, cv.COLOR_GRAY2RGB)
       negative_img = cv.cvtColor(negative_img, cv.COLOR_GRAY2RGB)
       positive_img = cv.cvtColor(positive_img, cv.COLOR_GRAY2RGB)
-    return anchor_img, negative_img, positive_img
-
-
-class IdenticalPairIterable(AbstractUnicodeRendererIterable):
-
-  def __next__(self):
-    anchor_img = self.empty_image
-    positive_img = self.empty_image
-    while (anchor_img == self.empty_image).all():
-      anchor_char = self.draw_with_replacement()
-      supported_anchor_fonts = self.unicode_mapping_dict[anchor_char]
-      anchor_img = try_draw_char(anchor_char, supported_anchor_fonts, self.empty_image,
-                                 self.img_size, self.font_size)
-    while (positive_img == self.empty_image).all():
-      # Possible fonts need to be regenerated because the drawing function is bugged
-      supported_positive_fonts = self.unicode_mapping_dict[anchor_char]
-      # print(anchor_char, len(supported_positive_fonts))
-      positive_img = try_draw_char(anchor_char, supported_positive_fonts, self.empty_image,
-                                   self.img_size, self.font_size)
-    if self.rgb:
-      anchor_img = cv.cvtColor(anchor_img, cv.COLOR_GRAY2RGB)
-      positive_img = cv.cvtColor(positive_img, cv.COLOR_GRAY2RGB)
-    return anchor_img, positive_img, 1
-
-
-class RandomPairIterable(AbstractUnicodeRendererIterable):
-  """
-  # TODO currently the override draws with replacement.
-  # TODO ideally for the false positive rate we want to draw without replacement, pairwise (not character wise)
-  supply "override_unicode_population" for false positive rate calculation
-  """
-
-  def __init__(self, img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
-               rgb: bool = True):
-    super().__init__(img_size, font_size, font_dict_path, rgb)
-
-  def __next__(self):
-    anchor_img = self.empty_image
-    negative_img = self.empty_image
-    while (anchor_img == self.empty_image).all():
-      anchor_char = self.draw_with_replacement()
-      supported_anchor_fonts = self.unicode_mapping_dict[anchor_char]
-      anchor_img = try_draw_char(anchor_char, supported_anchor_fonts, self.empty_image,
-                                 self.img_size, self.font_size)
-    while (negative_img == self.empty_image).all():
-      negative_char = anchor_char
-      while negative_char == anchor_char:
-        negative_char = self.draw_with_replacement()
-      supported_negative_fonts = self.unicode_mapping_dict[negative_char]
-      negative_img = try_draw_char(negative_char, supported_negative_fonts, self.empty_image,
-                                   self.img_size, self.font_size)
-    if self.rgb:
-      anchor_img = cv.cvtColor(anchor_img, cv.COLOR_GRAY2RGB)
-      negative_img = cv.cvtColor(negative_img, cv.COLOR_GRAY2RGB)
-    return anchor_img, negative_img, 0
+    return anchor_img, positive_img, negative_img
 
 
 class BalancedPairIterable(AbstractUnicodeRendererIterable):
@@ -239,8 +185,8 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
     lab = 1.0
     while (img_a == self.empty_image).all():
       codepoint_a = self.draw_with_replacement()
-      supported_anchor_fonts = self.unicode_mapping_dict[codepoint_a]
-      img_a = try_draw_char(codepoint_a, supported_anchor_fonts, self.empty_image,
+      supported_a_fonts = self.unicode_mapping_dict[codepoint_a]
+      img_a = try_draw_char(codepoint_a, supported_a_fonts, self.empty_image,
                             self.img_size, self.font_size)
     while (img_b == self.empty_image).all():
       codepoint_b = codepoint_a
@@ -248,8 +194,8 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
         lab = 0.0
         while codepoint_b == codepoint_a:
           codepoint_b = self.draw_with_replacement()
-      supported_negative_fonts = self.unicode_mapping_dict[codepoint_b]
-      img_b = try_draw_char(codepoint_b, supported_negative_fonts, self.empty_image,
+      supported_b_fonts = self.unicode_mapping_dict[codepoint_b]
+      img_b = try_draw_char(codepoint_b, supported_b_fonts, self.empty_image,
                             self.img_size, self.font_size)
     if self.rgb:
       img_a = cv.cvtColor(img_a, cv.COLOR_GRAY2RGB)
@@ -397,11 +343,14 @@ def display_triplets_data_sample():
                                             batch_size=batch_size)
   for d in triplets_dataset:
     for b in range(batch_size):
-      cv.imshow('anchor', d[0][b].numpy())
-      cv.imshow('positive', d[1][b].numpy())
-      cv.imshow('negative', d[2][b].numpy())
-      cv.waitKey(0)
-      cv.destroyAllWindows()
+      fig = plt.figure()
+      fig.add_subplot(1, 3, 1)
+      plt.imshow(d[0][b].numpy())
+      fig.add_subplot(1, 3, 2)
+      plt.imshow(d[1][b].numpy())
+      fig.add_subplot(1, 3, 3)
+      plt.imshow(d[2][b].numpy())
+      plt.show()
 
 
 def display_pairs_data_sample():
@@ -424,10 +373,10 @@ if __name__ == '__main__':
   # test_drawing(.4,200)
   # test_try_drawing()
   # With OpenCV, display 10 training triplets and 5 testing pairs
-  display_chars(10, 10, .6, 200)
+  # display_chars(10, 10, .6, 200)
 
   # test Dataset
-  # display_triplets_data_sample()
+  display_triplets_data_sample()
   # display_pairs_data_sample()
   # ds = get_balanced_pair_tf_dataset(100, 0.4)
   # i = 0
