@@ -8,7 +8,7 @@ import cv2 as cv
 import tensorflow as tf
 
 FONTS_PATH = './fonts/'
-DRAW_ATTEMPTS = 25
+MAX_DRAW_ATTEMPTS = 25
 
 
 # TODO: check for replacement drawing i.e. 63609 63656 63705 63582 63606 63618
@@ -159,12 +159,17 @@ class TripletIterable(AbstractUnicodeRendererIterable):
       supported_negative_fonts = self.unicode_mapping_dict[negative_char]
       negative_img = try_draw_char(negative_char, supported_negative_fonts, self.empty_image,
                                    self.img_size, self.font_size)
+    draw_attempts = 0
     while (positive_img == self.empty_image).all():
       # Possible fonts need to be regenerated because the drawing function is bugged
       supported_positive_fonts = self.unicode_mapping_dict[anchor_char]
       # print(anchor_char, len(supported_positive_fonts))
       positive_img = try_draw_char(anchor_char, supported_positive_fonts, self.empty_image,
                                    self.img_size, self.font_size)
+      draw_attempts+=1
+      if draw_attempts > MAX_DRAW_ATTEMPTS:
+        positive_img = transformImg(anchor_img)
+        break      
     if self.rgb:
       anchor_img = cv.cvtColor(anchor_img, cv.COLOR_GRAY2RGB)
       negative_img = cv.cvtColor(negative_img, cv.COLOR_GRAY2RGB)
@@ -188,6 +193,7 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
       supported_a_fonts = self.unicode_mapping_dict[codepoint_a]
       img_a = try_draw_char(codepoint_a, supported_a_fonts, self.empty_image,
                             self.img_size, self.font_size)
+    draw_attempts = 0
     while (img_b == self.empty_image).all():
       codepoint_b = codepoint_a
       if random.random() < self.p_neg:
@@ -197,6 +203,10 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
       supported_b_fonts = self.unicode_mapping_dict[codepoint_b]
       img_b = try_draw_char(codepoint_b, supported_b_fonts, self.empty_image,
                             self.img_size, self.font_size)
+      draw_attempts+=1
+      if draw_attempts > MAX_DRAW_ATTEMPTS:
+        img_b = transformImg(img_a)
+        break   
     if self.rgb:
       img_a = cv.cvtColor(img_a, cv.COLOR_GRAY2RGB)
       img_b = cv.cvtColor(img_b, cv.COLOR_GRAY2RGB)
