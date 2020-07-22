@@ -319,6 +319,25 @@ def test_drawing(font_size=.2, img_size=200):
       print(e, i, len(unicode_mapping_dict[i]))
 
 
+def test_try_drawing(font_size=.2, img_size=200):
+  # 17 corrupt unicode chars
+  # 3600 invalid pixel size
+  infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+  unicode_mapping_dict = pickle.load(infile)
+  infile.close()
+  empty_image = np.full([img_size, img_size], 255)
+  pop = list(unicode_mapping_dict.keys())
+  random.shuffle(pop)
+  for i in pop:
+    try:
+      # print(a)
+      img = try_draw_char(i, unicode_mapping_dict[i], empty_image, img_size, font_size)
+      cv.imshow('img', img)
+      cv.waitKey(0)
+    except (ValueError, OSError) as e:
+      print(e, i, len(unicode_mapping_dict[i]))
+
+
 def display_chars(display_train, display_test, font_size=.2, img_size=200):
   anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(display_train, display_test, font_size,
                                                                              img_size, color_format='RGB')
@@ -373,13 +392,13 @@ def display_pairs_data_sample():
 if __name__ == '__main__':
   # Tests drawing each unicode character with a random font
   # test_drawing(.4,200)
-
+  test_try_drawing()
   # With OpenCV, display 10 training triplets and 5 testing pairs
   # display_chars(100, 100, .4, 100)
 
   # test Dataset
   # display_triplets_data_sample()
-  display_pairs_data_sample()
+  # display_pairs_data_sample()
   # ds = get_balanced_pair_tf_dataset(100, 0.4)
   # i = 0
   # for datapoint in ds:
