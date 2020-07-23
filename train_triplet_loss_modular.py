@@ -148,13 +148,11 @@ def get_efn_model(model_version,img_size,pooling, drop_connect_rate):
 
 
 def train():
+  allow_gpu_memory_growth()
   if args.tune:
     if not os.path.exists(args.log_dir):
       os.makedirs(args.log_dir)
-      with open('stdout.txt', 'w') as fp: 
-        pass
     sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
-  allow_gpu_memory_growth()
   if args.loss_function == 'cos':
     loss_function = cos_triplet_loss
     measure_function = cos_sim

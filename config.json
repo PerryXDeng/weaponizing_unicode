@@ -1,6 +1,6 @@
 {
   "settings": {
-    "n_samples": "2",
+    "n_samples": "10",
     "log_dir": "logs"
   },
   "hyperparameter_config_space": {
@@ -17,19 +17,18 @@
         "options": "B2,B3,B4,B5"
       },
       "img_size": {
-        "type": "UI",
-        "lower": "100",
-        "upper": "150"
+        "type": "C",
+        "options": "100,150"
       },
       "batch_size": {
         "type": "UI",
         "lower": "20",
-        "upper": "55"
+        "upper": "40"
       },
       "drop_connect_rate": {
         "type": "UF",
-        "lower": ".01",
-        "upper": ".4"
+        "lower": ".05",
+        "upper": ".35"
       },
       "font_size": {
        "type": "UF",

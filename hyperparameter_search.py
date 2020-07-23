@@ -14,14 +14,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--config_file", default="config.json", help="Directory for JSON config file")
 args = parser.parse_args()
 
-num_batches = 7
-standard_flags = f'--tune=True --reporting_interval={num_batches//2} --font_dict_path="../../fonts/multifont_mapping.pkl"'
+num_batches = 15
+standard_flags = f'--tune=True --reporting_interval={num_batches//2} --font_dict_path="../../fonts/multifont_mapping.pkl" --train_iterations={num_batches}'
 
 def train_one_gpu(conf):
     flags = f'python3 ../../train_triplet_loss_modular.py {standard_flags}'
     for i in conf:
-      if i == "batch_size":
-        flags+=f' --train_iterations={str(conf[i]*num_batches)}'
       flags+=f' --{i}={str(conf[i])}'
     print(flags)
     os.system(flags)
@@ -29,9 +27,9 @@ def train_one_gpu(conf):
       textfile = open("logs/metric.txt", 'r')
       metric = float(textfile.readline())
       textfile.close()
-      tune.track.log(testing_acc=metric, done=True)
+      tune.report(testing_acc=metric, done=True)
     else:
-      tune.track.log(testing_acc=0, done=True)
+      tune.report(testing_acc=0, done=True)
 
 # Define logdir file, create it if does not exist
 _init_time = datetime.now()
