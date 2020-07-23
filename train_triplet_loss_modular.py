@@ -1,5 +1,7 @@
 import argparse
 import datetime
+import os
+import sys
 import numpy as np
 import tensorflow as tf
 import efficientnet.tfkeras as efn
@@ -11,6 +13,7 @@ from utilities import allow_gpu_memory_growth, initialize_ckpt_saver, initialize
 
 parser = argparse.ArgumentParser()
 _init_time = datetime.datetime.now()
+# BS * 7
 parser.add_argument('-tri', '--train_iterations', action='store', type=int, default=5000)
 parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=4000)
@@ -30,8 +33,13 @@ parser.add_argument('-lr', '--learning_rate', action='store', type=float, defaul
 # Options: cos, euc
 parser.add_argument('-lf', '--loss_function', action='store', type=str, default='cos')
 parser.add_argument('-img', '--img_size', action='store', type=int, default=100)
-parser.add_argument('-font', '--font_size', action='store', type=float, default=.4)
+parser.add_argument('-font', '--font_size', action='store', type=float, default=.5)
 parser.add_argument('-e', '--epsilon', action='store', type=float, default=10e-5)
+parser.add_argument('-m', '--efn_model', action='store', type=str, default='B3')
+parser.add_argument('-dcr', '--drop_connect_rate', action='store', type=float, default=0.2)
+parser.add_argument('-t', '--tune', action='store', type=bool, default=False)
+parser.add_argument('-sm', '--save_model', action='store', type=bool, default=False)
+parser.add_argument('-fdp', '--font_dict_path', action='store', type=str, default="./fonts/multifont_mapping.pkl")
 args = parser.parse_args()
 
 
@@ -119,9 +127,33 @@ def test_for_num_step(measure_fn, model, pairwise_dataset, num_steps, epsilon):
   regression_fitter = LogisticRegression(penalty='none', random_state=0, solver='saga')
   regression_fitter.fit(measures, labs)
   return regression_fitter.score(measures, labs)
+  
+def get_efn_model(model_version,img_size,pooling, drop_connect_rate):
+  if model_version == 'B2':
+    return efn.EfficientNetB2(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
+  elif model_version == 'B3':
+    return efn.EfficientNetB3(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
+  elif model_version == 'B4':
+    return efn.EfficientNetB4(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
+  elif model_version == 'B5':
+    return efn.EfficientNetB5(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
 
 
 def train():
+  if args.tune:
+    if not os.path.exists(args.log_dir):
+      os.makedirs(args.log_dir)
+      with open('stdout.txt', 'w') as fp: 
+        pass
+    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
   allow_gpu_memory_growth()
   if args.loss_function == 'cos':
     loss_function = cos_triplet_loss
@@ -132,9 +164,7 @@ def train():
   else:
     loss_function = None
     measure_function = None
-  model = efn.EfficientNetB3(weights='imagenet',
-                             input_tensor=tf.keras.layers.Input([args.img_size, args.img_size, 3]), include_top=False,
-                             pooling=args.pooling)
+  model = get_efn_model(args.efn_model,args.img_size,args.pooling,args.drop_connect_rate)
   # Training Settings
   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
 
@@ -146,33 +176,38 @@ def train():
   preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
 
   triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size)
+                                            batch_size=args.batch_size,font_dict_path=args.font_dict_path)
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs)
+                                               preprocess_fn=preprocess_pairs,font_dict_path=args.font_dict_path)
 
   # Training Loop
   reporting_interval = args.reporting_interval
   test_iterations = args.test_sample_size // args.test_batch_size
   restore_checkpoint_if_avail(saver, ckpt_manager)
+  final_training_acc = 0
   for i in range(args.train_iterations // reporting_interval):
     mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
                                    args.debug_nan)
     print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
     acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    final_training_acc = acc
     print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
-
+  
   print()
-
-  # serialize model to JSON
-  model_json = model.to_json()
-  with open("model/model.json", "w") as json_file:
-    json_file.write(model_json)
-  # serialize weights to HDF5
-  model.save_weights("model/model.h5")
-
+  if args.save_model:
+    # serialize model to JSON
+    model_json = model.to_json()
+    with open("model/model.json", "w") as json_file:
+      json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights("model/model.h5")
+  if args.tune:
+    textfile = open(f"{args.log_dir}/metric.txt", 'a')
+    textfile.write(f'{final_training_acc}\n')
+    textfile.close()
 
 if __name__ == '__main__':
   train()

@@ -7,7 +7,7 @@ import random
 import cv2 as cv
 import tensorflow as tf
 
-FONTS_PATH = './fonts/'
+FONTS_PATH = '../../fonts/'
 MAX_DRAW_ATTEMPTS = 25
 
 
