@@ -6,35 +6,43 @@ import numpy as np
 import random
 import cv2 as cv
 import tensorflow as tf
+from absl import logging
+import os
 
-FONTS_PATH = '../../fonts/'
+FONTS_PATH_DEFAULT = './fonts/'
 MAX_DRAW_ATTEMPTS = 25
 
 
 # TODO: check for replacement drawing i.e. 63609 63656 63705 63582 63606 63618
-def try_draw_char(char, available_fonts, empty_image, img_size, font_size):
+def try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix):
   if len(available_fonts) == 0:
     # No fonts support drawing this unicode character, or the unicode character is corrupt!
     return empty_image
   else:
+    img = empty_image
     selected_font = available_fonts[random.randint(0, len(available_fonts) - 1)]
+    if type(path_prefix) is not str or type(selected_font) is not str:
+      logging.warning(f"INCOMPATIBLE TYPES, FONT FILEPATHS {str(path_prefix)} {str(selected_font)}")
+    path = os.path.join(path_prefix,selected_font)
     try:
-      img = transformImg(drawChar(img_size, chr(char), font_size, FONTS_PATH + selected_font))
+      img = transformImg(drawChar(img_size, chr(char), font_size, path))
     except ValueError:
       # The drawn character is to big for the desired region!
       available_fonts.remove(selected_font)
-      return try_draw_char(char, available_fonts, empty_image, img_size, font_size)
+      return try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix)
+    except OSError:
+      logging.error(f"Failed to open font: {path}")
     if (img == empty_image).all():
       # The selected font does not support drawing this character!
       available_fonts.remove(selected_font)
-      return try_draw_char(char, available_fonts, empty_image, img_size, font_size)
+      return try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix)
     else:
       return img
 
 
 def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color_format='gray'):
   empty_image = np.full((img_size, img_size), 255)
-  infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+  infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
   infile.close()  # Perry: it's programming best practice to close such file pointers, or use Python with syntax
   # TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
@@ -77,7 +85,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
       # print(anchor_char, len(supported_positive_fonts))
       positive_img = try_draw_char(anchor_char, supported_positive_fonts, empty_image, img_size, font_size)
       draw_attempts += 1
-      if draw_attempts > DRAW_ATTEMPTS:
+      if draw_attempts > MAX_DRAW_ATTEMPTS:
         positive_img = transformImg(anchor_img)
         break
     if color_format == 'RGB':
@@ -102,7 +110,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
         supported_x2_fonts = unicode_mapping_dict[x1_char]
         x2_test_img = try_draw_char(x1_char, supported_x2_fonts, empty_image, img_size, font_size)
         draw_attempts += 1
-        if draw_attempts > DRAW_ATTEMPTS:
+        if draw_attempts > MAX_DRAW_ATTEMPTS:
           x2_test_img = transformImg(x1_test_img)
           break
     else:
@@ -122,17 +130,18 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
 
 class AbstractUnicodeRendererIterable(Iterator):
 
-  def __init__(self, img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
-               rgb: bool = True):
+  def __init__(self, img_size: int, font_size: float, font_dict_path: bytes = b"./fonts/multifont_mapping.pkl",
+               rgb: bool = True, path_prefix: bytes = None):
     self.img_size = img_size
     self.empty_image = np.full((img_size, img_size), 255, dtype=np.uint8)
-    with open(font_dict_path, 'rb') as fp:
+    with open(font_dict_path.decode("utf-8"), 'rb') as fp:
       self.unicode_mapping_dict = pickle.load(fp)
     self.codepoints = list(self.unicode_mapping_dict.keys())
     self.num_codepoints = len(self.codepoints)
     self.font_size = font_size
     self.draw_with_replacement = lambda: self.codepoints[random.randint(0, self.num_codepoints - 1)]
     self.rgb = rgb
+    self.path_prefix = path_prefix.decode("utf-8") if path_prefix else FONTS_PATH_DEFAULT
 
   def __iter__(self):
     return self
@@ -151,21 +160,21 @@ class TripletIterable(AbstractUnicodeRendererIterable):
       anchor_char = self.draw_with_replacement()
       supported_anchor_fonts = self.unicode_mapping_dict[anchor_char]
       anchor_img = try_draw_char(anchor_char, supported_anchor_fonts, self.empty_image,
-                                 self.img_size, self.font_size)
+                                 self.img_size, self.font_size, self.path_prefix)
     while (negative_img == self.empty_image).all():
       negative_char = anchor_char
       while negative_char == anchor_char:
         negative_char = self.draw_with_replacement()
       supported_negative_fonts = self.unicode_mapping_dict[negative_char]
       negative_img = try_draw_char(negative_char, supported_negative_fonts, self.empty_image,
-                                   self.img_size, self.font_size)
+                                   self.img_size, self.font_size, self.path_prefix)
     draw_attempts = 0
     while (positive_img == self.empty_image).all():
       # Possible fonts need to be regenerated because the drawing function is bugged
       supported_positive_fonts = self.unicode_mapping_dict[anchor_char]
       # print(anchor_char, len(supported_positive_fonts))
       positive_img = try_draw_char(anchor_char, supported_positive_fonts, self.empty_image,
-                                   self.img_size, self.font_size)
+                                   self.img_size, self.font_size, self.path_prefix)
       draw_attempts+=1
       if draw_attempts > MAX_DRAW_ATTEMPTS:
         positive_img = transformImg(anchor_img)
@@ -179,9 +188,9 @@ class TripletIterable(AbstractUnicodeRendererIterable):
 
 class BalancedPairIterable(AbstractUnicodeRendererIterable):
 
-  def __init__(self, img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
-               rgb: bool = True, p_neg: float = 0.5):
-    super().__init__(img_size, font_size, font_dict_path, rgb)
+  def __init__(self, img_size: int, font_size: float, font_dict_path: bytes = "b./fonts/multifont_mapping.pkl",
+               rgb: bool = True, p_neg: float = 0.5, path_prefix: bytes = None):
+    super().__init__(img_size, font_size, font_dict_path, rgb, path_prefix)
     self.p_neg = p_neg
 
   def __next__(self):
@@ -192,7 +201,7 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
       codepoint_a = self.draw_with_replacement()
       supported_a_fonts = self.unicode_mapping_dict[codepoint_a]
       img_a = try_draw_char(codepoint_a, supported_a_fonts, self.empty_image,
-                            self.img_size, self.font_size)
+                            self.img_size, self.font_size, self.path_prefix)
     draw_attempts = 0
     while (img_b == self.empty_image).all():
       codepoint_b = codepoint_a
@@ -202,7 +211,7 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
           codepoint_b = self.draw_with_replacement()
       supported_b_fonts = self.unicode_mapping_dict[codepoint_b]
       img_b = try_draw_char(codepoint_b, supported_b_fonts, self.empty_image,
-                            self.img_size, self.font_size)
+                            self.img_size, self.font_size, self.path_prefix)
       draw_attempts+=1
       if draw_attempts > MAX_DRAW_ATTEMPTS:
         img_b = transformImg(img_a)
@@ -215,15 +224,16 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
 
 @tf.autograph.experimental.do_not_convert
 def get_triplet_tf_dataset(img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
-                           rgb: bool = True,
+                           rgb: bool = True, path_prefix: str = FONTS_PATH_DEFAULT,
                            num_workers: int = 1, preprocess_fn=lambda x, y, z: (x, y, z), batch_size: int = 2,
                            buffer_size: int = 4):
   """
 
   :param img_size:
   :param font_size:
-  :param fonts_path:
+  :param font_dict_path:
   :param rgb:
+  :param path_prefix:
   :param num_workers:
   :param preprocess_fn:
   :param batch_size:
@@ -234,7 +244,7 @@ def get_triplet_tf_dataset(img_size: int, font_size: float, font_dict_path: str 
     img_shape = [img_size, img_size, 3]
   else:
     img_shape = [img_size, img_size, 1]
-  return tf.compat.v1.data.Dataset.from_generator(TripletIterable, args=(img_size, font_size, font_dict_path, rgb),
+  return tf.compat.v1.data.Dataset.from_generator(TripletIterable, args=(img_size, font_size, font_dict_path, rgb, path_prefix),
                                                   output_types=(tf.uint8, tf.uint8, tf.uint8),
                                                   output_shapes=(tf.TensorShape(img_shape),
                                                                  tf.TensorShape(img_shape),
@@ -244,7 +254,7 @@ def get_triplet_tf_dataset(img_size: int, font_size: float, font_dict_path: str 
 
 @tf.autograph.experimental.do_not_convert
 def get_balanced_pair_tf_dataset(img_size: int, font_size: float, font_dict_path: str = "./fonts/multifont_mapping.pkl",
-                                 rgb: bool = True,
+                                 rgb: bool = True, path_prefix: str = FONTS_PATH_DEFAULT,
                                  num_workers: int = 1, preprocess_fn=lambda x, y, z: (x, y, z), batch_size: int = 2,
                                  buffer_size: int = 4):
   """
@@ -252,6 +262,7 @@ def get_balanced_pair_tf_dataset(img_size: int, font_size: float, font_dict_path
   :param img_size:
   :param font_size:
   :param font_dict_path:
+  :param path_prefix:
   :param rgb:
   :param num_workers:
   :param preprocess_fn:
@@ -264,7 +275,7 @@ def get_balanced_pair_tf_dataset(img_size: int, font_size: float, font_dict_path
   else:
     img_shape = [img_size, img_size, 1]
   return tf.compat.v1.data.Dataset.from_generator(BalancedPairIterable,
-                                                  args=(img_size, font_size, font_dict_path, rgb),
+                                                  args=(img_size, font_size, font_dict_path, rgb, 0.5, path_prefix),
                                                   output_types=(tf.uint8, tf.uint8, tf.float32),
                                                   output_shapes=(tf.TensorShape(img_shape),
                                                                  tf.TensorShape(img_shape),
@@ -275,14 +286,14 @@ def get_balanced_pair_tf_dataset(img_size: int, font_size: float, font_dict_path
 def test_drawing(font_size=.2, img_size=200):
   # 17 corrupt unicode chars
   # 3600 invalid pixel size
-  infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+  infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
   infile.close()
   for i in unicode_mapping_dict.keys():
     try:
       a = random.randint(0, len(unicode_mapping_dict[i]) - 1)
       # print(a)
-      transformImg(drawChar(img_size, chr(i), font_size, FONTS_PATH + unicode_mapping_dict[i][a]))
+      transformImg(drawChar(img_size, chr(i), font_size, FONTS_PATH_DEFAULT + unicode_mapping_dict[i][a]))
     except (ValueError, OSError) as e:
       print(e, i, len(unicode_mapping_dict[i]))
 
@@ -290,7 +301,7 @@ def test_drawing(font_size=.2, img_size=200):
 def test_try_drawing(font_size=.2, img_size=200):
   # 17 corrupt unicode chars
   # 3600 invalid pixel size
-  infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+  infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
   infile.close()
   empty_image = np.full([img_size, img_size], 255)
@@ -309,7 +320,7 @@ def test_try_drawing(font_size=.2, img_size=200):
 def test_try_drawing_matplotlib(font_size=.2, img_size=200):
   # 17 corrupt unicode chars
   # 3600 invalid pixel size
-  infile = open(FONTS_PATH + 'multifont_mapping.pkl', 'rb')
+  infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
   infile.close()
   empty_image = np.full([img_size, img_size], 255, dtype=np.uint8)

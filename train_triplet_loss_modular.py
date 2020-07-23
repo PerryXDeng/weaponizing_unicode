@@ -2,6 +2,7 @@ import argparse
 import datetime
 import os
 import sys
+import time
 import numpy as np
 import tensorflow as tf
 import efficientnet.tfkeras as efn
@@ -10,11 +11,13 @@ from generate_datasets import get_triplet_tf_dataset, get_balanced_pair_tf_datas
 from utilities import allow_gpu_memory_growth, initialize_ckpt_saver, initialize_ckpt_manager, save_checkpoint, \
   restore_checkpoint_if_avail, \
   save_keras_model_weights
+from absl import logging
 
 parser = argparse.ArgumentParser()
 _init_time = datetime.datetime.now()
 # BS * 7
 parser.add_argument('-tri', '--train_iterations', action='store', type=int, default=5000)
+parser.add_argument('-trs', '--train_seconds', action='store', type=int, default=60*5)
 parser.add_argument('-bs', '--batch_size', action='store', type=int, default=32)
 parser.add_argument('-ts', '--test_sample_size', action='store', type=int, default=4000)
 parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, default=24)
@@ -22,7 +25,8 @@ parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
                                            _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
 parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=1)
-parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=True)
+parser.add_argument('-ris', '--reporting_interval_seconds', action='store', type=int, default=10)
+parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=False)
 parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, default=False)
 # Type of global pooling applied to the output of the last convolutional layer, giving a 2D tensor
 # Options: max, avg (None also an option, probably not something we want to use)
@@ -147,7 +151,153 @@ def get_efn_model(model_version,img_size,pooling, drop_connect_rate):
                              pooling=pooling, drop_connect_rate=drop_connect_rate)
 
 
-def train():
+def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, num_seconds, debug_nan):
+  """
+
+  :param loss_fn: function
+  :param model:
+  :param optimizer:
+  :param triplet_dataset:
+  :param epsilon:
+  :param num_seconds:
+  :param debug_nan: bool
+  :return: mean loss
+  """
+  loss_sum = 0
+  start_time = time.time()
+  num_steps = 0
+  for datapoint in triplet_dataset:
+    if time.time() - start_time > num_seconds:
+      break
+    with tf.GradientTape() as tape:
+      anc, pos, neg = datapoint
+      anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
+      loss = loss_fn(anchor_forward, positive_forward, negative_forward, epsilon)
+      loss_sum += loss.numpy()
+    # Get gradients of loss wrt the weights.
+    gradients = tape.gradient(loss, model.trainable_weights)
+    # Update the weights of the model.
+    grad_check = None
+    if debug_nan:
+      grad_check = [tf.debugging.check_numerics(g, message='Gradient NaN Found!!!') for g in gradients if
+                    g is not None] + [tf.debugging.check_numerics(loss, message="Loss NaN Found!!!")]
+    with tf.control_dependencies(grad_check):
+      optimizer.apply_gradients(zip(gradients, model.trainable_weights))
+    num_steps += 1
+  return loss_sum / num_steps
+
+
+def train_time():
+  logging.set_verbosity(logging.INFO)
+  allow_gpu_memory_growth()
+  if args.loss_function == 'cos':
+    loss_function = cos_triplet_loss
+    measure_function = cos_sim
+  elif args.loss_function == 'euc':
+    loss_function = euc_triplet_loss
+    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
+  else:
+    loss_function = None
+    measure_function = None
+  model = get_efn_model(args.efn_model,args.img_size,args.pooling,args.drop_connect_rate)
+  # Training Settings
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+
+  saver = initialize_ckpt_saver(model, optimizer)
+  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
+
+  preprocess_triplets = lambda x, y, z: (
+      floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
+
+  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
+                                            batch_size=args.batch_size, path_prefix="./fonts/")
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
+                                               preprocess_fn=preprocess_pairs, path_prefix="./fonts/")
+
+  # Training Loop
+  reporting_interval = args.reporting_interval_seconds
+  test_iterations = args.test_sample_size // args.test_batch_size
+  restore_checkpoint_if_avail(saver, ckpt_manager)
+  start_time = time.time()
+  iteration = 0
+  elapsed_seconds = lambda : time.time() - start_time
+  readable_time = lambda secs : str(datetime.timedelta(seconds=secs))
+  while (iteration * reporting_interval) < args.train_seconds:
+    mean_loss = train_for_num_seconds(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
+                                      args.debug_nan)
+    acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    saver.step.assign_add(reporting_interval)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
+    iteration += 1
+    logging.info(f'Iteration {iteration}')
+    logging.info(f"Elapsed Time.: {readable_time(elapsed_seconds())}")
+    logging.info(f'Elapsed Training Time: {readable_time(iteration * reporting_interval)}')
+    logging.info(f'Mean Loss: {mean_loss}')
+    logging.info(f"Testing Acc.: {acc}")
+
+  # serialize model to JSON
+  model_json = model.to_json()
+  with open("model/model.json", "w") as json_file:
+    json_file.write(model_json)
+  # serialize weights to HDF5
+  model.save_weights("model/model.h5")
+
+
+def train_steps():
+  logging.set_verbosity(logging.INFO)
+  allow_gpu_memory_growth()
+  if args.loss_function == 'cos':
+    loss_function = cos_triplet_loss
+    measure_function = cos_sim
+  elif args.loss_function == 'euc':
+    loss_function = euc_triplet_loss
+    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
+  else:
+    loss_function = None
+    measure_function = None
+  model = get_efn_model(args.efn_model,args.img_size,args.pooling,args.drop_connect_rate)
+  # Training Settings
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+
+  saver = initialize_ckpt_saver(model, optimizer)
+  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
+
+  preprocess_triplets = lambda x, y, z: (
+      floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
+
+  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
+                                            batch_size=args.batch_size)
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
+                                               preprocess_fn=preprocess_pairs)
+
+  # Training Loop
+  reporting_interval = args.reporting_interval
+  test_iterations = args.test_sample_size // args.test_batch_size
+  restore_checkpoint_if_avail(saver, ckpt_manager)
+  for i in range(args.train_iterations // reporting_interval):
+    mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
+                                   args.debug_nan)
+    logging.info(f'Iteration {i * reporting_interval + 1}')
+    logging.info(f'Mean Loss: {mean_loss}')
+    acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    logging.info(f"Testing Acc.: {acc}")
+    saver.step.assign_add(reporting_interval)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
+
+  # serialize model to JSON
+  model_json = model.to_json()
+  with open("model/model.json", "w") as json_file:
+    json_file.write(model_json)
+  # serialize weights to HDF5
+  model.save_weights("model/model.h5")
+
+
+def train_tune_cli():
+  logging.set_verbosity(logging.INFO)
   if args.tune:
     if not os.path.exists(args.log_dir):
       os.makedirs(args.log_dir)
@@ -176,9 +326,9 @@ def train():
   preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
 
   triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size,font_dict_path=args.font_dict_path)
+                                            batch_size=args.batch_size,font_dict_path=args.font_dict_path, path_prefix='../../fonts/')
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs,font_dict_path=args.font_dict_path)
+                                               preprocess_fn=preprocess_pairs,font_dict_path=args.font_dict_path, path_prefix='../../fonts/')
 
   # Training Loop
   reporting_interval = args.reporting_interval
@@ -188,15 +338,14 @@ def train():
   for i in range(args.train_iterations // reporting_interval):
     mean_loss = train_for_num_step(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
                                    args.debug_nan)
-    print(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
+    logging.info(f'Step {i * reporting_interval + 1} Mean Loss: {mean_loss}')
     acc = test_for_num_step(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     final_training_acc = acc
-    print(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
+    logging.info(f"Step {i * reporting_interval + 1} Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
-  
-  print()
+
   if args.save_model:
     # serialize model to JSON
     model_json = model.to_json()
@@ -210,4 +359,4 @@ def train():
     textfile.close()
 
 if __name__ == '__main__':
-  train()
+  train_tune_cli()
