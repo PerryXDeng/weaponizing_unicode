@@ -2,6 +2,34 @@ import tensorflow as tf
 import os
 
 
+class ModifiedL2Regularization:
+  """
+  a custom regularization method for transfer learning
+  """
+  def __init__(self, fresh_model, multiplier):
+    if multiplier > 0:
+      weights = [tf.reshape(tf.stop_gradient(tf.identity(w)), [-1]) for w in fresh_model.trainable_weights]
+      self.weight_size = [tf.shape(w)[0].numpy() for w in weights]
+      self.ragged_fresh_weights = tf.RaggedTensor.from_row_lengths(tf.concat(weights, axis=0),
+                                                                   row_lengths=self.weight_size)
+      self.multiplier = multiplier
+    else:
+      self.multiplier = None
+
+  @tf.function
+  def loss(self, trained_model):
+    if self.multiplier:
+      ragged_trained_weights = tf.RaggedTensor.from_row_lengths(
+        tf.concat([tf.reshape(v, [-1]) for v in trained_model.trainable_weights], axis=0),
+        row_lengths=self.weight_size)
+      return self.multiplier * tf.math.reduce_sum(tf.math.squared_difference(self.ragged_fresh_weights, ragged_trained_weights))
+    else:
+      with tf.device('/device:GPU:0'):
+        return tf.constant(0.0)
+
+  def __call__(self, trained_model):
+    return self.loss(trained_model)
+
 def allow_gpu_memory_growth():
   gpus = tf.compat.v1.config.experimental.get_visible_devices('GPU')
   for gpu in gpus:
