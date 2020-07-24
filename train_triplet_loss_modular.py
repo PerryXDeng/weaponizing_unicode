@@ -417,6 +417,7 @@ def train_steps_minibatch():
   reporting_interval = args.reporting_interval
   test_iterations = args.test_sample_size // args.test_batch_size
   restore_checkpoint_if_avail(saver, ckpt_manager)
+  final_training_acc = 0
   for i in range(args.train_iterations // reporting_interval):
     mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_minibatch(loss_function, model, optimizer,
                                                                          triplets_dataset, args.epsilon,
@@ -426,17 +427,29 @@ def train_steps_minibatch():
     logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
     logging.info(f'Mean L2 Loss: {mean_l2_loss}')
     acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    final_training_acc = acc
     logging.info(f"Testing Acc.: {acc}")
+    if args.tune:
+      print(f'Minibatch {(i + 1) * reporting_interval}')
+      print(f'Mean Loss: {mean_loss}')
+      print(f'Mean Triplet Loss: {mean_triplet_loss}')
+      print(f'Mean L2 Loss: {mean_l2_loss}')
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
 
-  # serialize model to JSON
-  model_json = model.to_json()
-  with open("model/model.json", "w") as json_file:
-    json_file.write(model_json)
-  # serialize weights to HDF5
-  model.save_weights("model/model.h5")
+  if args.save_model:
+    # serialize model to JSON
+    model_json = model.to_json()
+    if not os.path.exists("model"):
+      os.makedirs("model")
+    with open("model/model.json", "w") as json_file:
+      json_file.write(model_json)
+    # serialize weights to HDF5
+  if args.tune:
+    textfile = open(f"{args.log_dir}/metric.txt", 'a')
+    textfile.write(f'{final_training_acc}\n')
+    textfile.close()
 
 
 def train_tune_cli():
@@ -488,6 +501,12 @@ def train_tune_cli():
     logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
     logging.info(f'Mean L2 Loss: {mean_l2_loss}')
     logging.info(f"Testing Acc.: {acc}")
+    # Outputs to stdout.txt
+    if args.tune:
+      print(f'Batch {i * reporting_interval + 1}')
+      print(f'Mean Triplet Loss: {mean_triplet_loss}')
+      print(f'Mean L2 Loss: {mean_l2_loss}')
+      print(f"Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
@@ -495,6 +514,8 @@ def train_tune_cli():
   if args.save_model:
     # serialize model to JSON
     model_json = model.to_json()
+    if not os.path.exists("model"):
+      os.makedirs("model")
     with open("model/model.json", "w") as json_file:
       json_file.write(model_json)
     # serialize weights to HDF5
