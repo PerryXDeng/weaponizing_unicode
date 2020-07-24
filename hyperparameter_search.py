@@ -14,8 +14,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--config_file", default="config.json", help="Directory for JSON config file")
 args = parser.parse_args()
 
-num_batches = 15
-standard_flags = f'--tune=True --reporting_interval={num_batches//2} --font_dict_path="../../fonts/multifont_mapping.pkl" --train_iterations={num_batches}'
+num_batches = 20
+standard_flags = f'--tune=True --reporting_interval={num_batches//3} --font_dict_path="../../fonts/multifont_mapping.pkl" --train_iterations={num_batches}'
 
 def train_one_gpu(conf):
     flags = f'python3 ../../train_triplet_loss_modular.py {standard_flags}'

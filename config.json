@@ -1,6 +1,6 @@
 {
   "settings": {
-    "n_samples": "10",
+    "n_samples": "30",
     "log_dir": "logs"
   },
   "hyperparameter_config_space": {
@@ -12,9 +12,24 @@
         "lower": ".0001",
         "upper": ".001"
       },
+      "beta_1": {
+        "type": "UF",
+        "lower": ".855",
+        "upper": ".945"
+      },
+      "beta_2": {
+        "type": "UF",
+        "lower": ".9981",
+        "upper": ".9999"
+      },
+      "l2_multiplier": {
+        "type": "UF",
+        "lower": "0",
+        "upper": ".2"
+      },
       "efn_model": {
         "type": "C",
-        "options": "B2,B3,B4,B5"
+        "options": "B0,B3"
       },
       "img_size": {
         "type": "C",

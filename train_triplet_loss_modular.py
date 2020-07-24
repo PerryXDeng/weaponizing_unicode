@@ -33,6 +33,8 @@ parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, de
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
 parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.0005)
+parser.add_argument('-b1', '--beta_1', action='store', type=float, default=.9)
+parser.add_argument('-b2', '--beta_2', action='store', type=float, default=.999)
 parser.add_argument('-l2', '--l2_multiplier', action='store', type=float, default=.1)
 
 # Vector comparison method
@@ -206,23 +208,27 @@ def test_for_num_batch(measure_fn, model, pairwise_dataset, num_minibatch, epsil
   return regression_fitter.score(measures, labs)
 
 
-def get_efn_model(model_version, img_size, pooling, drop_connect_rate):
-  if model_version == 'B2':
+def get_efn_model(model_version,img_size,pooling, drop_connect_rate):
+  if model_version == 'B0':
+    return efn.EfficientNetB0(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
+  elif model_version == 'B1':
+    return efn.EfficientNetB1(weights='imagenet',
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
+  elif model_version == 'B2':
     return efn.EfficientNetB2(weights='imagenet',
-                              input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
-                              pooling=pooling, drop_connect_rate=drop_connect_rate)
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
   elif model_version == 'B3':
     return efn.EfficientNetB3(weights='imagenet',
-                              input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
-                              pooling=pooling, drop_connect_rate=drop_connect_rate)
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
   elif model_version == 'B4':
     return efn.EfficientNetB4(weights='imagenet',
-                              input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
-                              pooling=pooling, drop_connect_rate=drop_connect_rate)
-  elif model_version == 'B5':
-    return efn.EfficientNetB5(weights='imagenet',
-                              input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
-                              pooling=pooling, drop_connect_rate=drop_connect_rate)
+                             input_tensor=tf.keras.layers.Input([img_size, img_size, 3]), include_top=False,
+                             pooling=pooling, drop_connect_rate=drop_connect_rate)
 
 
 def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, num_seconds, debug_nan, regularization_loss):
@@ -280,7 +286,7 @@ def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, n
 #     measure_function = None
 #   model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
 #   # Training Settings
-#   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+#   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
 #
 #   saver = initialize_ckpt_saver(model, optimizer)
 #   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
@@ -340,7 +346,7 @@ def train_steps():
   model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
   l2 = ModifiedL2Regularization(model, args.l2_multiplier)
   # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
 
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
@@ -393,7 +399,7 @@ def train_steps_minibatch():
   model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
   l2 = ModifiedL2Regularization(model, args.l2_multiplier)
   # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
 
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
@@ -452,7 +458,7 @@ def train_tune_cli():
   model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
   l2 = ModifiedL2Regularization(model, args.l2_multiplier)
   # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
 
   saver = initialize_ckpt_saver(model, optimizer)
   ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
