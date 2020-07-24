@@ -1,12 +1,13 @@
 {
-  "settings": {
-    "n_samples": "30",
-    "log_dir": "logs"
-  },
   "hyperparameter_config_space": {
     "constants": {
     },
     "search_space": {
+      "learning_rate": {
+        "type": "UF",
+        "lower": ".0001",
+        "upper": ".0006"
+      },
       "learning_rate": {
         "type": "UF",
         "lower": ".0001",
@@ -33,7 +34,7 @@
       },
       "img_size": {
         "type": "C",
-        "options": "150"
+        "options": "150,200"
       },
       "batch_size": {
         "type": "UI",

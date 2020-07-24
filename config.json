@@ -1,8 +1,4 @@
 {
-  "settings": {
-    "n_samples": "30",
-    "log_dir": "logs"
-  },
   "hyperparameter_config_space": {
     "constants": {
     },

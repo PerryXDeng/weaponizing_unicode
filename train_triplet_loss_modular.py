@@ -48,6 +48,7 @@ parser.add_argument('-dcr', '--drop_connect_rate', action='store', type=float, d
 parser.add_argument('-t', '--tune', action='store', type=bool, default=False)
 parser.add_argument('-sm', '--save_model', action='store', type=bool, default=False)
 parser.add_argument('-fdp', '--font_dict_path', action='store', type=str, default="./fonts/multifont_mapping.pkl")
+parser.add_argument('-mb', '--mini_batching', action='store', type=bool, default=True)
 args = parser.parse_args()
 
 
@@ -527,7 +528,7 @@ def train_tune_cli():
 
 
 if __name__ == '__main__':
-  if args.tune:
-    train_tune_cli()
-  else:
+  if args.mini_batching:
     train_steps_minibatch()
+  else:
+    train_tune_cli()
