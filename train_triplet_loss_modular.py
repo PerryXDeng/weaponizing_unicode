@@ -25,7 +25,7 @@ parser.add_argument('-tbs', '--test_batch_size', action='store', type=int, defau
 parser.add_argument('-dir', '--log_dir', action='store', type=str,
                     default='logs/%s%s' % (_init_time.astimezone().tzinfo.tzname(None),
                                            _init_time.strftime('%Y%m%d_%H_%M_%S_%f')))
-parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=5)
+parser.add_argument('-ri', '--reporting_interval', action='store', type=int, default=5) # this needs to be >= bm
 parser.add_argument('-ris', '--reporting_interval_seconds', action='store', type=int, default=10)
 parser.add_argument('-db', '--debug_nan', action='store', type=bool, default=False)
 parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, default=False)
@@ -33,6 +33,7 @@ parser.add_argument('-ckpt', '--save_checkpoints', action='store', type=bool, de
 # Options: max, avg (None also an option, probably not something we want to use)
 parser.add_argument('-p', '--pooling', action='store', type=str, default='avg')
 parser.add_argument('-lr', '--learning_rate', action='store', type=float, default=.0005)
+parser.add_argument('-l2', '--l2_multiplier', action='store', type=float, default=.1)
 
 # Vector comparison method
 # Options: cos, euc
@@ -75,6 +76,18 @@ def floatify_and_normalize(data):
   return (data - (255 / 2)) / (255 / 2)
 
 
+class ModifiedL2Regularization:
+  def __init__(self, fresh_model):
+    weights = [tf.reshape(tf.stop_gradient(tf.identity(w)), [-1]) for w in fresh_model.trainable_weights]
+    self.weight_size = [tf.shape(w)[0].numpy() for w in weights]
+    self.ragged_fresh_weights = tf.RaggedTensor.from_row_lengths(tf.concat(weights, axis=0), row_lengths=self.weight_size)
+
+  @tf.function
+  def loss(self, trained_model):
+    ragged_trained_weights = tf.RaggedTensor.from_row_lengths(tf.concat([tf.reshape(v, [-1]) for v in trained_model.trainable_weights], axis=0),
+                                     row_lengths=self.weight_size)
+    return tf.math.reduce_sum(tf.math.squared_difference(self.ragged_fresh_weights, ragged_trained_weights))
+
 def train_for_num_batch(loss_fn, model, optimizer, triplet_dataset, epsilon, num_batch, debug_nan):
   """
 
@@ -108,7 +121,7 @@ def train_for_num_batch(loss_fn, model, optimizer, triplet_dataset, epsilon, num
   return loss_sum / num_batch
 
 
-def train_for_num_minibatch(loss_fn, model, optimizer, triplet_dataset, epsilon, total_minibatch, batch_multiplier):
+def train_for_num_minibatch(loss_fn, model, optimizer, triplet_dataset, epsilon, total_minibatch, batch_multiplier, l2_regularizer, l2_multiplier):
   """
 
   :param loss_fn: function
@@ -118,9 +131,12 @@ def train_for_num_minibatch(loss_fn, model, optimizer, triplet_dataset, epsilon,
   :param epsilon:
   :param total_minibatch:
   :param batch_multiplier:
+  :param l2_regularizer:
   :return: mean loss
   """
-  loss_sum = 0
+  total_loss_sum = 0
+  triplet_loss_sum = 0
+  l2_loss_sum = 0
   num_batch = math.ceil(total_minibatch / batch_multiplier)
   total_minibatch_count = 0
   for _ in range(num_batch):
@@ -132,10 +148,14 @@ def train_for_num_minibatch(loss_fn, model, optimizer, triplet_dataset, epsilon,
       with tf.GradientTape() as tape:
         anc, pos, neg = datapoint
         anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
-        loss = loss_fn(anchor_forward, positive_forward, negative_forward, epsilon)
-        loss_sum += loss.numpy()
+        triplet_loss = loss_fn(anchor_forward, positive_forward, negative_forward, epsilon)
+        l2_loss = l2_multiplier * l2_regularizer.loss(model)
+        total_loss = triplet_loss + l2_loss
+        triplet_loss_sum += triplet_loss.numpy()
+        l2_loss_sum += l2_loss.numpy()
+        total_loss_sum += total_loss.numpy()
       # Get gradients of loss wrt the weights.
-      mini_grads.append(zip(tape.gradient(loss, model.trainable_weights), model.trainable_weights))
+      mini_grads.append(zip(tape.gradient(total_loss, model.trainable_weights), model.trainable_weights))
       minibatch_count += 1
       total_minibatch_count += 1
     average_grads = []
@@ -161,10 +181,10 @@ def train_for_num_minibatch(loss_fn, model, optimizer, triplet_dataset, epsilon,
       grad_and_var = (grad, v)
       average_grads.append(grad_and_var)
     optimizer.apply_gradients(average_grads)
-  return loss_sum / total_minibatch
+  return total_loss_sum / total_minibatch, triplet_loss_sum / total_minibatch, l2_loss_sum / total_minibatch
 
 
-def test_for_num_minibatch(measure_fn, model, pairwise_dataset, num_minibatch, epsilon):
+def test_for_num_batch(measure_fn, model, pairwise_dataset, num_minibatch, epsilon):
   """
   
   :param measure_fn: distance or similarity function, both works for logistic regression
@@ -283,7 +303,7 @@ def train_time():
   while (iteration * reporting_interval) < args.train_seconds:
     mean_loss = train_for_num_seconds(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
                                       args.debug_nan)
-    acc = test_for_num_minibatch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)
@@ -339,7 +359,7 @@ def train_steps():
                                     args.debug_nan)
     logging.info(f'Batch {i * reporting_interval + 1}')
     logging.info(f'Mean Loss: {mean_loss}')
-    acc = test_for_num_minibatch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     logging.info(f"Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
@@ -366,6 +386,7 @@ def train_steps_minibatch():
     loss_function = None
     measure_function = None
   model = get_efn_model(args.efn_model,args.img_size,args.pooling,args.drop_connect_rate)
+  l2 = ModifiedL2Regularization(model)
   # Training Settings
   optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate)
 
@@ -386,10 +407,12 @@ def train_steps_minibatch():
   test_iterations = args.test_sample_size // args.test_batch_size
   restore_checkpoint_if_avail(saver, ckpt_manager)
   for i in range(args.train_iterations // reporting_interval):
-    mean_loss = train_for_num_minibatch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval, args.batch_multiplier)
+    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_minibatch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval, args.batch_multiplier, l2, args.l2_multiplier)
     logging.info(f'Minibatch {(i+1) * reporting_interval}')
     logging.info(f'Mean Loss: {mean_loss}')
-    acc = test_for_num_minibatch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
+    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     logging.info(f"Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
@@ -444,7 +467,7 @@ def train_tune_cli():
     mean_loss = train_for_num_batch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
                                     args.debug_nan)
     logging.info(f'Batch {i * reporting_interval + 1} Mean Loss: {mean_loss}')
-    acc = test_for_num_minibatch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
     final_training_acc = acc
     logging.info(f"Batch {i * reporting_interval + 1} Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
