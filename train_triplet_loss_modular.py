@@ -388,6 +388,10 @@ def train_steps():
 def train_steps_minibatch():
   logging.set_verbosity(logging.INFO)
   allow_gpu_memory_growth()
+  if args.tune:
+    if not os.path.exists(args.log_dir):
+      os.makedirs(args.log_dir)
+    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
   if args.loss_function == 'cos':
     loss_function = cos_triplet_loss
     measure_function = cos_sim
@@ -408,11 +412,13 @@ def train_steps_minibatch():
   preprocess_triplets = lambda x, y, z: (
     floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
   preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
-
+                                               
   triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size)
+                                            batch_size=args.batch_size, font_dict_path=args.font_dict_path,
+                                            path_prefix='../../fonts/')
   pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs)
+                                               preprocess_fn=preprocess_pairs, font_dict_path=args.font_dict_path,
+                                               path_prefix='../../fonts/')
 
   # Training Loop
   reporting_interval = args.reporting_interval

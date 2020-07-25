@@ -3,10 +3,10 @@
     "constants": {
     },
     "search_space": {
-      "learning_rate": {
-        "type": "UF",
-        "lower": ".0001",
-        "upper": ".0006"
+      "batch_multiplier": {
+        "type": "UI",
+        "lower": "2",
+        "upper": "5"
       },
       "learning_rate": {
         "type": "UF",
@@ -38,8 +38,8 @@
       },
       "batch_size": {
         "type": "UI",
-        "lower": "20",
-        "upper": "40"
+        "lower": "8",
+        "upper": "22"
       },
       "drop_connect_rate": {
         "type": "UF",
