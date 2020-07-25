@@ -438,9 +438,9 @@ def train_steps_minibatch():
     logging.info(f"Testing Acc.: {acc}")
     if args.tune:
       print(f'Minibatch {(i + 1) * reporting_interval}')
-      print(f'Mean Loss: {mean_loss}')
       print(f'Mean Triplet Loss: {mean_triplet_loss}')
       print(f'Mean L2 Loss: {mean_l2_loss}')
+      print(f"Testing Acc.: {acc}")
     saver.step.assign_add(reporting_interval)
     if args.save_checkpoints:
       save_checkpoint(ckpt_manager)

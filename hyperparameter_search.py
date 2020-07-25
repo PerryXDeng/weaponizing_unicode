@@ -18,14 +18,14 @@ parser.add_argument("--mini_batching", type=bool, default=False, help="Whether t
 parser.add_argument("--num_steps", type=int, default=20, help="Number of updates the model will take")
 parser.add_argument("--num_reports", type=int, default=3, help="Number of times to intermittently report the verification accuracy")
 args = parser.parse_args()
-standard_flags = '--tune=True --font_dict_path="../../fonts/multifont_mapping.pkl"'
+standard_flags = f'--tune=True --font_dict_path=../../fonts/multifont_mapping.pkl --log_dir={args.log_dir}'
 
 
 def train_triplet_loss_modular(conf):
     global standard_flags
     flags = f'python3 ../../train_triplet_loss_modular.py {standard_flags}'
     if args.mini_batching:
-      standard_flags += f' --train_iterations={conf["batch_multiplier"]*args.num_steps} --reporting_interval={(conf["batch_multiplier"]*args.num_steps)//args.num_reports}'
+      flags += f' --train_iterations={conf["batch_multiplier"]*args.num_steps} --reporting_interval={(conf["batch_multiplier"]*args.num_steps)//args.num_reports}'
     for i in conf:
       flags+=f' --{i}={str(conf[i])}'
     print(flags)
@@ -40,8 +40,11 @@ def train_triplet_loss_modular(conf):
       tune.report(testing_acc=0, done=True)
 
 def triplet_loss_modular_hyperparameter_tuning():
+  global standard_flags
   if not args.mini_batching:
-    standard_flags += f' --train_iterations={args.num_steps} --reporting_interval={args.num_steps//args.num_reports}'
+    standard_flags += f' --train_iterations={args.num_steps} --reporting_interval={args.num_steps//args.num_reports} --mini_batching=False'
+  else:
+    standard_flags += f' --mini_batching=True'
   # Define logdir file, create it if does not exist
   _init_time = datetime.now()
   logdir = f"logs_hpo_{_init_time.astimezone().tzinfo.tzname(None)+_init_time.strftime('%Y%m%d_%H_%M_%S_%f')}"
