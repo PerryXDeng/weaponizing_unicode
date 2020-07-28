@@ -1,6 +1,8 @@
 {
   "hyperparameter_config_space": {
     "constants": {
+      "efn_model": "B0",
+      "img_size": "150"
     },
     "search_space": {
       "batch_multiplier": {
@@ -10,31 +12,23 @@
       },
       "learning_rate": {
         "type": "UF",
-        "lower": ".0001",
-        "upper": ".0006"
+        "lower": ".0002",
+        "upper": ".00055"
       },
       "beta_1": {
         "type": "UF",
-        "lower": ".9001",
-        "upper": ".9309"
+        "lower": ".9005",
+        "upper": ".92"
       },
       "beta_2": {
         "type": "UF",
         "lower": ".99881",
-        "upper": ".99959"
+        "upper": ".9995"
       },
       "l2_multiplier": {
         "type": "UF",
-        "lower": ".0753",
-        "upper": ".1517"
-      },
-      "efn_model": {
-        "type": "C",
-        "options": "B0"
-      },
-      "img_size": {
-        "type": "C",
-        "options": "150,200"
+        "lower": ".08",
+        "upper": ".14"
       },
       "batch_size": {
         "type": "UI",
