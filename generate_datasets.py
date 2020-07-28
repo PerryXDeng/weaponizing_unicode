@@ -12,9 +12,8 @@ import os
 FONTS_PATH_DEFAULT = './fonts/'
 MAX_DRAW_ATTEMPTS = 25
 
-
 # TODO: check for replacement drawing i.e. 63609 63656 63705 63582 63606 63618
-def try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix):
+def try_draw_char_all_fonts(char, available_fonts, empty_image, img_size, font_size, path_prefix, transform_img=True):
   if len(available_fonts) == 0:
     # No fonts support drawing this unicode character, or the unicode character is corrupt!
     return empty_image
@@ -25,26 +24,37 @@ def try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_
       logging.warning(f"INCOMPATIBLE TYPES, FONT FILEPATHS {str(path_prefix)} {str(selected_font)}")
     path = os.path.join(path_prefix,selected_font)
     try:
-      img = transformImg(drawChar(img_size, chr(char), font_size, path))
+      img = drawChar(img_size, chr(char), font_size, path)
+      if transform_img:
+        img = transformImg(img)
     except ValueError:
       # The drawn character is to big for the desired region!
       available_fonts.remove(selected_font)
-      return try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix)
+      return try_draw_char_all_fonts(char, available_fonts, empty_image, img_size, font_size, path_prefix)
     except OSError:
       logging.error(f"Failed to open font: {path}")
     if (img == empty_image).all():
       # The selected font does not support drawing this character!
       available_fonts.remove(selected_font)
-      return try_draw_char(char, available_fonts, empty_image, img_size, font_size, path_prefix)
+      return try_draw_char_all_fonts(char, available_fonts, empty_image, img_size, font_size, path_prefix)
     else:
       return img
 
+def try_draw_single_font(char, font, empty_image, img_size, font_size, path_prefix, transform_img=True):
+    img = empty_image
+    path = os.path.join(path_prefix,font)
+    try:
+      img = drawChar(img_size, chr(char), font_size, path)
+      if transform_img:
+        img = transformImg(img)
+    except (ValueError, OSError):
+      return empty_image
+    return img
 
 def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color_format='gray'):
   empty_image = np.full((img_size, img_size), 255)
   infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
-  infile.close()  # Perry: it's programming best practice to close such file pointers, or use Python with syntax
   # TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
   # Return dictionary of unsupported characters
   unicode_count = len(unicode_mapping_dict)
@@ -71,19 +81,19 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
       anchor_char = unicode_chars_available[random.randint(0, len(unicode_chars_available) - 1)]
       unicode_chars_available.remove(anchor_char)
       supported_anchor_fonts = unicode_mapping_dict[anchor_char]
-      anchor_img = try_draw_char(anchor_char, supported_anchor_fonts, empty_image, img_size, font_size)
+      anchor_img = try_draw_char_all_fonts(anchor_char, supported_anchor_fonts, empty_image, img_size, font_size, "./fonts")
     while (negative_img == empty_image).all():
       negative_char = anchor_char
       while negative_char == anchor_char:
         negative_char = unicode_chars_population[random.randint(0, unicode_count - 1)]
       supported_negative_fonts = unicode_mapping_dict[negative_char]
-      negative_img = try_draw_char(negative_char, supported_negative_fonts, empty_image, img_size, font_size)
+      negative_img = try_draw_char_all_fonts(negative_char, supported_negative_fonts, empty_image, img_size, font_size, "./fonts")
     draw_attempts = 0
     while (positive_img == empty_image).all():
       # Possible fonts need to be regenerated because the drawing function is bugged
       supported_positive_fonts = unicode_mapping_dict[anchor_char]
       # print(anchor_char, len(supported_positive_fonts))
-      positive_img = try_draw_char(anchor_char, supported_positive_fonts, empty_image, img_size, font_size)
+      positive_img = try_draw_char_all_fonts(anchor_char, supported_positive_fonts, empty_image, img_size, font_size, "./fonts")
       draw_attempts += 1
       if draw_attempts > MAX_DRAW_ATTEMPTS:
         positive_img = transformImg(anchor_img)
@@ -102,13 +112,13 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
       x1_char = unicode_chars_available[random.randint(0, len(unicode_chars_available) - 1)]
       unicode_chars_available.remove(x1_char)
       supported_x1_fonts = unicode_mapping_dict[x1_char]
-      x1_test_img = try_draw_char(x1_char, supported_x1_fonts, empty_image, img_size, font_size)
+      x1_test_img = try_draw_char_all_fonts(x1_char, supported_x1_fonts, empty_image, img_size, font_size, "./fonts")
     if y_test[i] == 1:
       draw_attempts = 0
       while (x2_test_img == empty_image).all():
         # Possible fonts need to be regenerated because the drawing function is bugged
         supported_x2_fonts = unicode_mapping_dict[x1_char]
-        x2_test_img = try_draw_char(x1_char, supported_x2_fonts, empty_image, img_size, font_size)
+        x2_test_img = try_draw_char_all_fonts(x1_char, supported_x2_fonts, empty_image, img_size, font_size, "./fonts")
         draw_attempts += 1
         if draw_attempts > MAX_DRAW_ATTEMPTS:
           x2_test_img = transformImg(x1_test_img)
@@ -119,7 +129,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
         while x2_char == x1_char:
           x2_char = unicode_chars_population[random.randint(0, unicode_count - 1)]
         supported_x2_fonts = unicode_mapping_dict[x2_char]
-        x2_test_img = try_draw_char(x2_char, supported_x2_fonts, empty_image, img_size, font_size)
+        x2_test_img = try_draw_char_all_fonts(x2_char, supported_x2_fonts, empty_image, img_size, font_size, "./fonts")
     if color_format == 'RGB':
       x1_test_img = cv.cvtColor(x1_test_img, cv.COLOR_GRAY2RGB)
       x2_test_img = cv.cvtColor(x2_test_img, cv.COLOR_GRAY2RGB)
@@ -159,22 +169,22 @@ class TripletIterable(AbstractUnicodeRendererIterable):
     while (anchor_img == self.empty_image).all():
       anchor_char = self.draw_with_replacement()
       supported_anchor_fonts = self.unicode_mapping_dict[anchor_char]
-      anchor_img = try_draw_char(anchor_char, supported_anchor_fonts, self.empty_image,
-                                 self.img_size, self.font_size, self.path_prefix)
+      anchor_img = try_draw_char_all_fonts(anchor_char, supported_anchor_fonts, self.empty_image,
+                                           self.img_size, self.font_size, self.path_prefix)
     while (negative_img == self.empty_image).all():
       negative_char = anchor_char
       while negative_char == anchor_char:
         negative_char = self.draw_with_replacement()
       supported_negative_fonts = self.unicode_mapping_dict[negative_char]
-      negative_img = try_draw_char(negative_char, supported_negative_fonts, self.empty_image,
-                                   self.img_size, self.font_size, self.path_prefix)
+      negative_img = try_draw_char_all_fonts(negative_char, supported_negative_fonts, self.empty_image,
+                                             self.img_size, self.font_size, self.path_prefix)
     draw_attempts = 0
     while (positive_img == self.empty_image).all():
       # Possible fonts need to be regenerated because the drawing function is bugged
       supported_positive_fonts = self.unicode_mapping_dict[anchor_char]
       # print(anchor_char, len(supported_positive_fonts))
-      positive_img = try_draw_char(anchor_char, supported_positive_fonts, self.empty_image,
-                                   self.img_size, self.font_size, self.path_prefix)
+      positive_img = try_draw_char_all_fonts(anchor_char, supported_positive_fonts, self.empty_image,
+                                             self.img_size, self.font_size, self.path_prefix)
       draw_attempts+=1
       if draw_attempts > MAX_DRAW_ATTEMPTS:
         positive_img = transformImg(anchor_img)
@@ -200,8 +210,8 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
     while (img_a == self.empty_image).all():
       codepoint_a = self.draw_with_replacement()
       supported_a_fonts = self.unicode_mapping_dict[codepoint_a]
-      img_a = try_draw_char(codepoint_a, supported_a_fonts, self.empty_image,
-                            self.img_size, self.font_size, self.path_prefix)
+      img_a = try_draw_char_all_fonts(codepoint_a, supported_a_fonts, self.empty_image,
+                                      self.img_size, self.font_size, self.path_prefix)
     draw_attempts = 0
     while (img_b == self.empty_image).all():
       codepoint_b = codepoint_a
@@ -210,8 +220,8 @@ class BalancedPairIterable(AbstractUnicodeRendererIterable):
         while codepoint_b == codepoint_a:
           codepoint_b = self.draw_with_replacement()
       supported_b_fonts = self.unicode_mapping_dict[codepoint_b]
-      img_b = try_draw_char(codepoint_b, supported_b_fonts, self.empty_image,
-                            self.img_size, self.font_size, self.path_prefix)
+      img_b = try_draw_char_all_fonts(codepoint_b, supported_b_fonts, self.empty_image,
+                                      self.img_size, self.font_size, self.path_prefix)
       draw_attempts+=1
       if draw_attempts > MAX_DRAW_ATTEMPTS:
         img_b = transformImg(img_a)
@@ -310,7 +320,7 @@ def test_try_drawing(font_size=.2, img_size=200):
   for i in pop:
     try:
       # print(a)
-      img = try_draw_char(i, unicode_mapping_dict[i], empty_image, img_size, font_size)
+      img = try_draw_char_all_fonts(i, unicode_mapping_dict[i], empty_image, img_size, font_size)
       cv.imshow('img', img)
       cv.waitKey(0)
     except (ValueError, OSError) as e:
@@ -331,7 +341,7 @@ def test_try_drawing_matplotlib(font_size=.2, img_size=200):
   for i in pop:
     try:
       # print(a)
-      img = try_draw_char(i, unicode_mapping_dict[i], empty_image, img_size, font_size)
+      img = try_draw_char_all_fonts(i, unicode_mapping_dict[i], empty_image, img_size, font_size)
       plt.imshow(img)
       plt.show()
     except (ValueError, OSError) as e:
@@ -342,7 +352,6 @@ def display_chars(display_train, display_test, font_size=.2, img_size=200):
   anchors, positives, negatives, x1_test, x2_test, y_test = compile_datasets(display_train, display_test, font_size,
                                                                              img_size, color_format='RGB')
   for i in range(display_train):
-    print(anchors[i].dtype)
     cv.imshow('anchor', anchors[i])
     cv.imshow('positive', positives[i])
     cv.imshow('negative', negatives[i])
@@ -394,10 +403,10 @@ if __name__ == '__main__':
   # test_drawing(.4,200)
   # test_try_drawing()
   # With OpenCV, display 10 training triplets and 5 testing pairs
-  # display_chars(10, 10, .6, 200)
+  display_chars(50000, 5000, .6, 150)
 
   # test Dataset
-  display_triplets_data_sample()
+  #display_triplets_data_sample()
   # display_pairs_data_sample()
   # ds = get_balanced_pair_tf_dataset(100, 0.4)
   # i = 0
