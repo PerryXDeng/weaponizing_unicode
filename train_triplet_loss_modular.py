@@ -232,45 +232,194 @@ def get_efn_model(model_version,img_size,pooling, drop_connect_rate):
                              pooling=pooling, drop_connect_rate=drop_connect_rate)
 
 
-def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, num_seconds, debug_nan, regularization_loss):
-  """
+def train_tune_cli_minibatch():
+  logging.set_verbosity(logging.INFO)
+  allow_gpu_memory_growth()
+  if args.tune:
+    if not os.path.exists(args.log_dir):
+      os.makedirs(args.log_dir)
+    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
+    sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), 'a')
+  if args.loss_function == 'cos':
+    loss_function = cos_triplet_loss
+    measure_function = cos_sim
+  elif args.loss_function == 'euc':
+    loss_function = euc_triplet_loss
+    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
+  else:
+    loss_function = None
+    measure_function = None
+  model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
+  l2 = ModifiedL2Regularization(model, args.l2_multiplier)
+  # Training Settings
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
 
-  :param loss_fn: function
-  :param model:
-  :param optimizer:
-  :param triplet_dataset:
-  :param epsilon:
-  :param num_seconds:
-  :param debug_nan: bool
-  :param regularization_loss:
-  :return: mean loss
-  """
-  total_loss_sum = 0
-  triplet_loss_sum = 0
-  l2_loss_sum = 0
-  start_time = time.time()
-  num_minibatch = 0
-  for datapoint in triplet_dataset:
-    if time.time() - start_time > num_seconds:
-      break
-    with tf.GradientTape() as tape:
-      anc, pos, neg = datapoint
-      anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
-      triplet_loss = loss_fn(anchor_forward, positive_forward, negative_forward, epsilon)
-      l2_loss = regularization_loss(model)
-      total_loss = triplet_loss + l2_loss
-      total_loss_sum += total_loss.numpy()
-    # Get gradients of loss wrt the weights.
-    gradients = tape.gradient(total_loss, model.trainable_weights)
-    # Update the weights of the model.
-    grad_check = None
-    if debug_nan:
-      grad_check = [tf.debugging.check_numerics(g, message='Gradient NaN Found!!!') for g in gradients if
-                    g is not None] + [tf.debugging.check_numerics(total_loss, message="Loss NaN Found!!!")]
-    with tf.control_dependencies(grad_check):
-      optimizer.apply_gradients(zip(gradients, model.trainable_weights))
-    num_minibatch += 1
-  return total_loss_sum / num_minibatch, triplet_loss_sum / num_minibatch, l2_loss_sum / num_minibatch
+  saver = initialize_ckpt_saver(model, optimizer)
+  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
+
+  preprocess_triplets = lambda x, y, z: (
+    floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
+                                               
+  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
+                                            batch_size=args.batch_size, font_dict_path=args.font_dict_path,
+                                            path_prefix='../../fonts/')
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
+                                               preprocess_fn=preprocess_pairs, font_dict_path=args.font_dict_path,
+                                               path_prefix='../../fonts/')
+
+  # Training Loop
+  reporting_interval = args.reporting_interval
+  test_iterations = args.test_sample_size // args.test_batch_size
+  restore_checkpoint_if_avail(saver, ckpt_manager)
+  final_training_acc = 0
+  for i in range(args.train_iterations // reporting_interval):
+    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_minibatch(loss_function, model, optimizer,
+                                                                         triplets_dataset, args.epsilon,
+                                                                         reporting_interval, args.batch_multiplier, l2)
+    logging.info(f'Minibatch {(i + 1) * reporting_interval}')
+    logging.info(f'Mean Loss: {mean_loss}')
+    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
+    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    final_training_acc = acc
+    logging.info(f"Testing Acc.: {acc}")
+    saver.step.assign_add(reporting_interval)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
+
+  if args.save_model:
+    # serialize model to JSON
+    model_json = model.to_json()
+    directory = os.path.join(args.log_dir, "model/")
+    if not os.path.exists(directory):
+      os.makedirs(directory)
+    with open(os.path.join(directory, "model.json"), "w") as json_file:
+      json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights(os.path.join(directory, "model.h5"))
+  if args.tune:
+    textfile = open(os.path.join(args.log_dir, 'metric.txt'), 'a')
+    textfile.write(f'{final_training_acc}\n')
+    textfile.close()
+
+
+def train_tune_cli():
+  logging.set_verbosity(logging.INFO)
+  allow_gpu_memory_growth()
+  if args.tune:
+    if not os.path.exists(args.log_dir):
+      os.makedirs(args.log_dir)
+    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
+    sys.stderr = open(os.path.join(args.log_dir, "stderr.txt"), 'a')
+  if args.loss_function == 'cos':
+    loss_function = cos_triplet_loss
+    measure_function = cos_sim
+  elif args.loss_function == 'euc':
+    loss_function = euc_triplet_loss
+    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
+  else:
+    loss_function = None
+    measure_function = None
+  model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
+  l2 = ModifiedL2Regularization(model, args.l2_multiplier)
+  # Training Settings
+  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
+
+  saver = initialize_ckpt_saver(model, optimizer)
+  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
+
+  preprocess_triplets = lambda x, y, z: (
+    floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
+  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
+
+  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
+                                            batch_size=args.batch_size, font_dict_path=args.font_dict_path,
+                                            path_prefix='../../fonts/')
+  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
+                                               preprocess_fn=preprocess_pairs, font_dict_path=args.font_dict_path,
+                                               path_prefix='../../fonts/')
+
+  # Training Loop
+  reporting_interval = args.reporting_interval
+  test_iterations = args.test_sample_size // args.test_batch_size
+  restore_checkpoint_if_avail(saver, ckpt_manager)
+  final_training_acc = 0
+  for i in range(args.train_iterations // reporting_interval):
+    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_batch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
+                                    args.debug_nan, l2)
+    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
+    final_training_acc = acc
+    logging.info(f'Batch {i * reporting_interval + 1}')
+    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
+    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
+    logging.info(f"Testing Acc.: {acc}")
+    saver.step.assign_add(reporting_interval)
+    if args.save_checkpoints:
+      save_checkpoint(ckpt_manager)
+
+  if args.save_model:
+    # serialize model to JSON
+    model_json = model.to_json()
+    directory = os.path.join(args.log_dir, "model/")
+    if not os.path.exists(directory):
+      os.makedirs(directory)
+    with open(os.path.join(directory, "model.json"), "w") as json_file:
+      json_file.write(model_json)
+    # serialize weights to HDF5
+    model.save_weights(os.path.join(directory, "model.h5"))
+  if args.tune:
+    textfile = open(os.path.join(args.log_dir, 'metric.txt'), 'a')
+    textfile.write(f'{final_training_acc}\n')
+    textfile.close()
+
+
+if __name__ == '__main__':
+  if args.mini_batching:
+    train_tune_cli_minibatch()
+  else:
+    train_tune_cli()
+
+
+# def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, num_seconds, debug_nan, regularization_loss):
+#   """
+#
+#   :param loss_fn: function
+#   :param model:
+#   :param optimizer:
+#   :param triplet_dataset:
+#   :param epsilon:
+#   :param num_seconds:
+#   :param debug_nan: bool
+#   :param regularization_loss:
+#   :return: mean loss
+#   """
+#   total_loss_sum = 0
+#   triplet_loss_sum = 0
+#   l2_loss_sum = 0
+#   start_time = time.time()
+#   num_minibatch = 0
+#   for datapoint in triplet_dataset:
+#     if time.time() - start_time > num_seconds:
+#       break
+#     with tf.GradientTape() as tape:
+#       anc, pos, neg = datapoint
+#       anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
+#       triplet_loss = loss_fn(anchor_forward, positive_forward, negative_forward, epsilon)
+#       l2_loss = regularization_loss(model)
+#       total_loss = triplet_loss + l2_loss
+#       total_loss_sum += total_loss.numpy()
+#     # Get gradients of loss wrt the weights.
+#     gradients = tape.gradient(total_loss, model.trainable_weights)
+#     # Update the weights of the model.
+#     grad_check = None
+#     if debug_nan:
+#       grad_check = [tf.debugging.check_numerics(g, message='Gradient NaN Found!!!') for g in gradients if
+#                     g is not None] + [tf.debugging.check_numerics(total_loss, message="Loss NaN Found!!!")]
+#     with tf.control_dependencies(grad_check):
+#       optimizer.apply_gradients(zip(gradients, model.trainable_weights))
+#     num_minibatch += 1
+#   return total_loss_sum / num_minibatch, triplet_loss_sum / num_minibatch, l2_loss_sum / num_minibatch
 #
 #
 # def train_time():
@@ -330,211 +479,3 @@ def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, n
 #     json_file.write(model_json)
 #   # serialize weights to HDF5
 #   model.save_weights("model/model.h5")
-
-
-def train_steps():
-  logging.set_verbosity(logging.INFO)
-  allow_gpu_memory_growth()
-  if args.loss_function == 'cos':
-    loss_function = cos_triplet_loss
-    measure_function = cos_sim
-  elif args.loss_function == 'euc':
-    loss_function = euc_triplet_loss
-    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
-  else:
-    loss_function = None
-    measure_function = None
-  model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
-  l2 = ModifiedL2Regularization(model, args.l2_multiplier)
-  # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
-
-  saver = initialize_ckpt_saver(model, optimizer)
-  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-
-  preprocess_triplets = lambda x, y, z: (
-    floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
-  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
-
-  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size)
-  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs)
-
-  # Training Loop
-  reporting_interval = args.reporting_interval
-  test_iterations = args.test_sample_size // args.test_batch_size
-  restore_checkpoint_if_avail(saver, ckpt_manager)
-  for i in range(args.train_iterations // reporting_interval):
-    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_batch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
-                                    args.debug_nan, l2)
-    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
-    logging.info(f'Batch {i * reporting_interval + 1}')
-    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
-    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
-    logging.info(f"Testing Acc.: {acc}")
-    saver.step.assign_add(reporting_interval)
-    if args.save_checkpoints:
-      save_checkpoint(ckpt_manager)
-
-  # serialize model to JSON
-  model_json = model.to_json()
-  with open("model/model.json", "w") as json_file:
-    json_file.write(model_json)
-  # serialize weights to HDF5
-  model.save_weights("model/model.h5")
-
-
-def train_steps_minibatch():
-  logging.set_verbosity(logging.INFO)
-  allow_gpu_memory_growth()
-  if args.tune:
-    if not os.path.exists(args.log_dir):
-      os.makedirs(args.log_dir)
-    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
-  if args.loss_function == 'cos':
-    loss_function = cos_triplet_loss
-    measure_function = cos_sim
-  elif args.loss_function == 'euc':
-    loss_function = euc_triplet_loss
-    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
-  else:
-    loss_function = None
-    measure_function = None
-  model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
-  l2 = ModifiedL2Regularization(model, args.l2_multiplier)
-  # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
-
-  saver = initialize_ckpt_saver(model, optimizer)
-  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-
-  preprocess_triplets = lambda x, y, z: (
-    floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
-  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
-                                               
-  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size, font_dict_path=args.font_dict_path,
-                                            path_prefix='../../fonts/')
-  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs, font_dict_path=args.font_dict_path,
-                                               path_prefix='../../fonts/')
-
-  # Training Loop
-  reporting_interval = args.reporting_interval
-  test_iterations = args.test_sample_size // args.test_batch_size
-  restore_checkpoint_if_avail(saver, ckpt_manager)
-  final_training_acc = 0
-  for i in range(args.train_iterations // reporting_interval):
-    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_minibatch(loss_function, model, optimizer,
-                                                                         triplets_dataset, args.epsilon,
-                                                                         reporting_interval, args.batch_multiplier, l2)
-    logging.info(f'Minibatch {(i + 1) * reporting_interval}')
-    logging.info(f'Mean Loss: {mean_loss}')
-    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
-    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
-    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
-    final_training_acc = acc
-    logging.info(f"Testing Acc.: {acc}")
-    if args.tune:
-      print(f'Minibatch {(i + 1) * reporting_interval}')
-      print(f'Mean Triplet Loss: {mean_triplet_loss}')
-      print(f'Mean L2 Loss: {mean_l2_loss}')
-      print(f"Testing Acc.: {acc}")
-    saver.step.assign_add(reporting_interval)
-    if args.save_checkpoints:
-      save_checkpoint(ckpt_manager)
-
-  if args.save_model:
-    # serialize model to JSON
-    model_json = model.to_json()
-    if not os.path.exists("model"):
-      os.makedirs("model")
-    with open("model/model.json", "w") as json_file:
-      json_file.write(model_json)
-    # serialize weights to HDF5
-  if args.tune:
-    textfile = open(f"{args.log_dir}/metric.txt", 'a')
-    textfile.write(f'{final_training_acc}\n')
-    textfile.close()
-
-
-def train_tune_cli():
-  logging.set_verbosity(logging.INFO)
-  allow_gpu_memory_growth()
-  if args.tune:
-    if not os.path.exists(args.log_dir):
-      os.makedirs(args.log_dir)
-    sys.stdout = open(os.path.join(args.log_dir, "stdout.txt"), 'a')
-  if args.loss_function == 'cos':
-    loss_function = cos_triplet_loss
-    measure_function = cos_sim
-  elif args.loss_function == 'euc':
-    loss_function = euc_triplet_loss
-    measure_function = lambda a, b, epsilon: tf.norm(a - b, axis=1)
-  else:
-    loss_function = None
-    measure_function = None
-  model = get_efn_model(args.efn_model, args.img_size, args.pooling, args.drop_connect_rate)
-  l2 = ModifiedL2Regularization(model, args.l2_multiplier)
-  # Training Settings
-  optimizer = tf.keras.optimizers.Adam(learning_rate=args.learning_rate, beta_1=args.beta_1, beta_2=args.beta_2)
-
-  saver = initialize_ckpt_saver(model, optimizer)
-  ckpt_manager = initialize_ckpt_manager(saver, args.log_dir)
-
-  preprocess_triplets = lambda x, y, z: (
-    floatify_and_normalize(x), floatify_and_normalize(y), floatify_and_normalize(z))
-  preprocess_pairs = lambda x, y, z: (floatify_and_normalize(x), floatify_and_normalize(y), z)
-
-  triplets_dataset = get_triplet_tf_dataset(args.img_size, args.font_size, preprocess_fn=preprocess_triplets,
-                                            batch_size=args.batch_size, font_dict_path=args.font_dict_path,
-                                            path_prefix='../../fonts/')
-  pairs_dataset = get_balanced_pair_tf_dataset(args.img_size, args.font_size, batch_size=args.test_batch_size,
-                                               preprocess_fn=preprocess_pairs, font_dict_path=args.font_dict_path,
-                                               path_prefix='../../fonts/')
-
-  # Training Loop
-  reporting_interval = args.reporting_interval
-  test_iterations = args.test_sample_size // args.test_batch_size
-  restore_checkpoint_if_avail(saver, ckpt_manager)
-  final_training_acc = 0
-  for i in range(args.train_iterations // reporting_interval):
-    mean_loss, mean_triplet_loss, mean_l2_loss = train_for_num_batch(loss_function, model, optimizer, triplets_dataset, args.epsilon, reporting_interval,
-                                    args.debug_nan, l2)
-    acc = test_for_num_batch(measure_function, model, pairs_dataset, test_iterations, args.epsilon)
-    final_training_acc = acc
-    logging.info(f'Batch {i * reporting_interval + 1}')
-    logging.info(f'Mean Triplet Loss: {mean_triplet_loss}')
-    logging.info(f'Mean L2 Loss: {mean_l2_loss}')
-    logging.info(f"Testing Acc.: {acc}")
-    # Outputs to stdout.txt
-    if args.tune:
-      print(f'Batch {i * reporting_interval + 1}')
-      print(f'Mean Triplet Loss: {mean_triplet_loss}')
-      print(f'Mean L2 Loss: {mean_l2_loss}')
-      print(f"Testing Acc.: {acc}")
-    saver.step.assign_add(reporting_interval)
-    if args.save_checkpoints:
-      save_checkpoint(ckpt_manager)
-
-  if args.save_model:
-    # serialize model to JSON
-    model_json = model.to_json()
-    if not os.path.exists("model"):
-      os.makedirs("model")
-    with open("model/model.json", "w") as json_file:
-      json_file.write(model_json)
-    # serialize weights to HDF5
-    model.save_weights("model/model.h5")
-  if args.tune:
-    textfile = open(f"{args.log_dir}/metric.txt", 'a')
-    textfile.write(f'{final_training_acc}\n')
-    textfile.close()
-
-
-if __name__ == '__main__':
-  if args.mini_batching:
-    train_steps_minibatch()
-  else:
-    train_tune_cli()
