@@ -191,24 +191,29 @@ class CosineSimGraphClustererGPU(_AbstractGraphClusterer):
 
   def _generate_adjacency_matrix(self, features:np.ndarray):
     # gpu [n, k]
-    ordered_features_gpu = cp.array(features)
+    # CP CHANGE
+    ordered_features_gpu = np.array(features)
     n, k = ordered_features_gpu.shape
 
     a = ordered_features_gpu.reshape((n, 1, 1, k))
     b = ordered_features_gpu.reshape((1, n, k, 1))
     # [n, n]
-    dot_products = cp.matmul(a, b).reshape((n, n))
+    # CP CHANGE
+    dot_products = np.matmul(a, b).reshape((n, n))
 
     # [n]
-    norms = cp.linalg.norm(ordered_features_gpu, axis=1)
+    # CP CHANGE
+    norms = np.linalg.norm(ordered_features_gpu, axis=1)
 
     norms_a = norms.reshape((n, 1))
     norms_b = norms.reshape((1, n)) # same as the above but transposed
     # [n, n]
-    norms_prod = cp.multiply(norms_a, norms_b)
+    # CP CHANGE
+    norms_prod = np.multiply(norms_a, norms_b)
     cosine_similarity = dot_products / (norms_prod + self.epsilon)
     # cpu [n, n]
-    adjacency_matrix = cp.asnumpy(cosine_similarity > self.threshold)
+    # CP CHANGE
+    adjacency_matrix = np.asnumpy(cosine_similarity > self.threshold)
     return adjacency_matrix
 
 
@@ -219,16 +224,19 @@ class EuclidDistGraphClustererGPU(_AbstractGraphClusterer):
 
   def _generate_adjacency_matrix(self, features:np.ndarray):
     # gpu [n, k]
-    ordered_features_gpu = cp.array(features)
+    # CP CHANGE
+    ordered_features_gpu = np.array(features)
     n, k = ordered_features_gpu.shape
 
     a = ordered_features_gpu.reshape((n, 1, k))
     b = ordered_features_gpu.reshape((1, n, k))
     # [n, n]
-    l2_norm = cp.linalg.norm(a - b, axis=2)
+    # CP CHANGE
+    l2_norm = np.linalg.norm(a - b, axis=2)
 
     # cpu [n, n]
-    adjacency_matrix = cp.asnumpy(l2_norm < self.threshold)
+    # CP CHANGE
+    adjacency_matrix = np.asnumpy(l2_norm < self.threshold)
     return adjacency_matrix
 
 
@@ -269,4 +277,5 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-  _test_dfs_components_finder()
+  a = CosineSimGraphClustererGPU(save_dir="./",threshold=.4,epsilon=1e-5)
+  a._cluster_features_into_equivalence_classes(a.features_dict)
