@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 import random
+from generate_datasets import try_draw_char_all_fonts
 
 
 def get_consortium_clusters_dict():
@@ -104,23 +105,24 @@ def get_consortium_clusters_model_accuracy_random_font(unicode_all_feature_vecto
                     total_supported_puny_pairs += 1
                     target_features = list(unicode_all_feature_vectors_dict[unicode_target].values())
                     source_features = list(unicode_all_feature_vectors_dict[unicode_source].values())
-                    target_random_feature = target_features[random.randint(0,len(target_features)-1)]
-                    source_random_feature = source_features[random.randint(0,len(source_features)-1)]
+                    target_random_feature = target_features[random.randint(0, len(target_features) - 1)]
+                    source_random_feature = source_features[random.randint(0, len(source_features) - 1)]
                     target_features_preprocessed = convert_to_tensor_and_reshape(target_random_feature)
                     source_features_preprocessed = convert_to_tensor_and_reshape(source_random_feature)
-                    sim_ = cos_distance(target_features_preprocessed,source_features_preprocessed)
+                    sim_ = cos_distance(target_features_preprocessed, source_features_preprocessed)
                     if sim_ > cos_threshold:
                         total_correct += 1
     print(total_correct / total_supported_puny_pairs)
-    
+
 
 def mergeSort_most_supported_font(font_unicodes_list, remove_list):
     if len(font_unicodes_list) == 1:
-        return [(font_unicodes_list[0][0],[i for i in font_unicodes_list[0][1] if i not in remove_list])]
+        ye = [(font_unicodes_list[0][0], [i for i in font_unicodes_list[0][1] if i not in remove_list])]
+        return ye
     else:
         mid = len(font_unicodes_list) // 2
-        a = mergeSort_most_supported_font(font_unicodes_list[:mid])
-        b = mergeSort_most_supported_font(font_unicodes_list[mid:])
+        a = mergeSort_most_supported_font(font_unicodes_list[:mid], remove_list)
+        b = mergeSort_most_supported_font(font_unicodes_list[mid:], remove_list)
         c = []
         a_count = 0
         b_count = 0
@@ -132,7 +134,7 @@ def mergeSort_most_supported_font(font_unicodes_list, remove_list):
                 c.append(a[a_count])
                 a_count += 1
             else:
-                if len(a[a_count][0][1]) > len(b[b_count][0][1]):
+                if len(a[a_count][1]) > len(b[b_count][1]):
                     c.append(a[a_count])
                     a_count += 1
                 else:
@@ -140,21 +142,52 @@ def mergeSort_most_supported_font(font_unicodes_list, remove_list):
                     b_count += 1
         return c
 
-def get_minimum_font_dict(font_unicodes_list, target_characters):
+
+def get_minimum_font_dict_merge(font_unicodes_list, target_characters):
     a = {}
     copied_font_unicodes_list = font_unicodes_list.copy()
     while len(a) < target_characters:
-        most_supported_font = mergeSort_most_supported_font(copied_font_unicodes_list, list(a.values()))[0][0]
+        copied_font_unicodes_list = mergeSort_most_supported_font(copied_font_unicodes_list, list(a.values()))
+        for i in range(3):
+            print(copied_font_unicodes_list[i][0], len(copied_font_unicodes_list[i][1]))
+        most_supported_font = copied_font_unicodes_list[0]
         for unicode in most_supported_font[1]:
+            assert unicode not in a
             a[unicode] = most_supported_font[0]
-            print(unicode,most_supported_font[0])
+        del copied_font_unicodes_list[0]
     return a
+
+
+def get_minimum_font_dict(font_unicodes_list, target_characters):
+    a = {}
+    last_update = []
+    copied_font_unicodes_list = font_unicodes_list.copy()
+    while len(a) < target_characters:
+        max_len_index = -1
+        max_len = 0
+        for char_ in range(len(copied_font_unicodes_list)):
+            copied_font_unicodes_list[char_] = (copied_font_unicodes_list[char_][0],
+                                                [i for i in copied_font_unicodes_list[char_][1] if
+                                                 i not in last_update])
+            font_len = len(copied_font_unicodes_list[char_][1])
+            if font_len > max_len:
+                max_len = font_len
+                max_len_index = char_
+        most_supported_font = copied_font_unicodes_list[max_len_index]
+        for unicode in most_supported_font[1]:
+            assert unicode not in a
+            a[unicode] = most_supported_font[0]
+        last_update = most_supported_font[1]
+        print(most_supported_font[0], max_len)
+        del copied_font_unicodes_list[max_len_index]
+    return a
+
 
 # Complexity: Where F is # of fonts & N is # of characters
 def create_minimum_font_dict(unicode_all_feature_vectors_dict_path):
     unicode_all_feature_vectors_dict = pickle.load(open(unicode_all_feature_vectors_dict_path, 'rb'))
     target_num_unicode_char = len(unicode_all_feature_vectors_dict)
-    minimum_font_dict = []
+    minimum_font_dict = {}
     for unicode, font_feature_dict in unicode_all_feature_vectors_dict.items():
         supported_fonts = font_feature_dict.keys()
         for font in supported_fonts:
@@ -165,7 +198,33 @@ def create_minimum_font_dict(unicode_all_feature_vectors_dict_path):
     return get_minimum_font_dict(list(minimum_font_dict.items()), target_num_unicode_char)
 
 
+def get_consortium_clusters_model_accuracy_min_used_fonts(unicode_all_feature_vectors_dict_path, font_dict_path,
+                                                          cos_threshold):
+    consortium_clusters_dict, total_puny_pairs = get_consortium_clusters_dict()
+    unicode_supported_fonts_dict = pickle.load(open(unicode_all_feature_vectors_dict_path, 'rb'))
+    unicode_font_dict = pickle.load(open(font_dict_path, 'rb'))
+    total_supported_puny_pairs = 0
+    total_correct = 0
+    for unicode_target in consortium_clusters_dict.keys():
+        if unicode_target in unicode_supported_fonts_dict:
+            for unicode_source in consortium_clusters_dict[unicode_target]:
+                if unicode_source in unicode_supported_fonts_dict:
+                    total_supported_puny_pairs += 1
+                    target_vect = convert_to_tensor_and_reshape(
+                        unicode_supported_fonts_dict[unicode_target][unicode_font_dict[unicode_target]])
+                    source_vect = convert_to_tensor_and_reshape(
+                        unicode_supported_fonts_dict[unicode_source][unicode_font_dict[unicode_source]])
+                    cos_sim_ = cos_distance(target_vect, source_vect)
+                    if cos_sim_ > cos_threshold:
+                        total_correct += 1
+    print(total_correct / total_supported_puny_pairs)
+
+
 if __name__ == '__main__':
-    #get_consortium_clusters_model_accuracy_median_vector("./codepoints_features_map.pkl",.4)
-    #get_consortium_clusters_model_accuracy_random_font("./codepoints_features_map_supported_fonts.pkl",.4)
-    create_minimum_font_dict("./codepoints_features_map_supported_fonts.pkl")
+    # get_consortium_clusters_model_accuracy_median_vector("./codepoints_features_map.pkl",.4)
+    # get_consortium_clusters_model_accuracy_random_font("./codepoints_features_map_supported_fonts.pkl",.4)
+    # ye_dict = create_minimum_font_dict("./codepoints_features_map_supported_fonts.pkl")
+    # with open("min_supported_fonts.pkl", 'wb+') as f:
+    #     pickle.dump(ye_dict, f)
+    get_consortium_clusters_model_accuracy_min_used_fonts("./codepoints_features_map_supported_fonts.pkl",
+                                                          "min_supported_fonts.pkl", .4)
