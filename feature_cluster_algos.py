@@ -2,14 +2,13 @@ import pickle
 import os
 import numpy as np
 import tensorflow as tf
-import cupy as cp
 import cv2 as cv
 from generate_datasets import try_draw_single_font
 from train_triplet_loss_modular import floatify_and_normalize
 from unicode_cons import cos_distance
 
 
-def generate_features_dict_file_path(save_dir:str): return os.path.join(save_dir, "codepoints_features_map.pkl")
+def generate_features_dict_file_path(save_dir:str): return os.path.join(save_dir, "consortium_feature_vects_200_clusters.pkl")
 
 
 def generate_codepoints_cluster_map_file_path(save_dir:str): return os.path.join(save_dir, "codepoints_cluster_map.pkl")
@@ -213,7 +212,7 @@ class CosineSimGraphClustererGPU(_AbstractGraphClusterer):
     cosine_similarity = dot_products / (norms_prod + self.epsilon)
     # cpu [n, n]
     # CP CHANGE
-    adjacency_matrix = np.asnumpy(cosine_similarity > self.threshold)
+    adjacency_matrix = np.asarray(cosine_similarity > self.threshold)
     return adjacency_matrix
 
 
@@ -277,5 +276,5 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-  a = CosineSimGraphClustererGPU(save_dir="./",threshold=.4,epsilon=1e-5)
-  a._cluster_features_into_equivalence_classes(a.features_dict)
+  a = CosineSimGraphClustererGPU(save_dir="./",threshold=.7,epsilon=1e-5)
+  a.find_and_save_equivalence_classes()
