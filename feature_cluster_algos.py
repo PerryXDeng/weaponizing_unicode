@@ -8,7 +8,7 @@ from train_triplet_loss_modular import floatify_and_normalize
 from unicode_cons import cos_distance
 
 
-def generate_features_dict_file_path(save_dir:str): return os.path.join(save_dir, "consortium_feature_vects_200_clusters.pkl")
+def generate_features_dict_file_path(save_dir:str): return os.path.join(save_dir, "features_dict_file.pkl")
 
 
 def generate_codepoints_cluster_map_file_path(save_dir:str): return os.path.join(save_dir, "codepoints_cluster_map.pkl")
