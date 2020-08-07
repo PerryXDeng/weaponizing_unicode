@@ -226,7 +226,6 @@ def generate_consortium_feature_vects_min_used_fonts(unicode_all_feature_vectors
     unicode_supported_fonts_dict = pickle.load(open(unicode_all_feature_vectors_dict_path, 'rb'))
     unicode_font_dict = pickle.load(open(font_dict_path, 'rb'))
     consortium_feature_vects = {}
-    print(len(consortium_clusters_dict))
     for unicode_target in list(consortium_clusters_dict.keys())[:n_clusters]:
         if unicode_target in unicode_supported_fonts_dict:
             for unicode_source in consortium_clusters_dict[unicode_target]:
@@ -239,19 +238,6 @@ def generate_consortium_feature_vects_min_used_fonts(unicode_all_feature_vectors
                             unicode_font_dict[unicode_source]]
     with open(f"consortium_feature_vects_{n_clusters}_clusters.pkl", 'wb+') as f:
         pickle.dump(consortium_feature_vects, f)
-    print(len(consortium_feature_vects))
-    
-    
-def generate_feature_vects_min_used_fonts(unicode_all_feature_vectors_dict_path, font_dict_path):
-    unicode_supported_fonts_dict = pickle.load(open(unicode_all_feature_vectors_dict_path, 'rb'))
-    unicode_font_dict = pickle.load(open(font_dict_path, 'rb'))
-    print(len(unicode_supported_fonts_dict),len(unicode_font_dict))
-    features_dict_file = {}
-    for unicode_ in unicode_supported_fonts_dict.keys():
-        features_dict_file[unicode_] = unicode_supported_fonts_dict[unicode_][unicode_font_dict[unicode_]]
-    with open(f"features_dict_file.pkl", 'wb+') as f:
-        pickle.dump(features_dict_file, f)
-    print(len(features_dict_file))
 
 
 if __name__ == '__main__':
@@ -263,11 +249,5 @@ if __name__ == '__main__':
     # get_consortium_clusters_model_accuracy_min_used_fonts("./codepoints_features_map_supported_fonts.pkl",
     #                                                       "min_supported_fonts.pkl", .4)
     # get_consortium_clusters_model_accuracy_median_vector("./codepoints_features_map.pkl", .4)
-    # generate_feature_vects_min_used_fonts("./codepoints_features_map_supported_fonts.pkl", "min_supported_fonts.pkl")
-    
-    #generate_consortium_feature_vects_min_used_fonts("./codepoints_features_map_supported_fonts.pkl",
-                                                     #"min_supported_fonts.pkl", 250)
-    unicode_supported_fonts_dict = pickle.load(open("codepoints_cluster_map.pkl", 'rb'))
-    for a,b in unicode_supported_fonts_dict.items():
-      print(a)
-      print(b)
+    generate_consortium_feature_vects_min_used_fonts("./codepoints_features_map_supported_fonts.pkl",
+                                                     "min_supported_fonts.pkl", 30)

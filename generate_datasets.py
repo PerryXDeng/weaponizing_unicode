@@ -43,6 +43,7 @@ def try_draw_char_all_fonts(char, available_fonts, empty_image, img_size, font_s
 def try_draw_single_font(char, font, empty_image, img_size, font_size, path_prefix, transform_img=True):
     img = empty_image
     path = os.path.join(path_prefix,font)
+    print(path)
     try:
       img = drawChar(img_size, chr(char), font_size, path)
       if transform_img:
@@ -55,6 +56,7 @@ def compile_datasets(training_size, test_size, font_size=.2, img_size=200, color
   empty_image = np.full((img_size, img_size), 255)
   infile = open(FONTS_PATH_DEFAULT + 'multifont_mapping.pkl', 'rb')
   unicode_mapping_dict = pickle.load(infile)
+  print(len(unicode_mapping_dict))
   # TODO!!: calculate number of supported codepoints, important for clustering optimization and paper
   # Return dictionary of unsupported characters
   unicode_count = len(unicode_mapping_dict)
@@ -401,9 +403,9 @@ def display_pairs_data_sample():
 if __name__ == '__main__':
   # Tests drawing each unicode character with a random font
   # test_drawing(.4,200)
-  # test_try_drawing()
+  # test_try_drawing ()
   # With OpenCV, display 10 training triplets and 5 testing pairs
-  display_chars(50000, 5000, .6, 150)
+  display_chars(10000, 100, .5, 150)
 
   # test Dataset
   #display_triplets_data_sample()

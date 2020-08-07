@@ -32,11 +32,11 @@ def cos_sim(x1, x2):
 
 # Where x1 is an anchor input, x2 belongs to the same class and x3 belongs to a different class
 def cos_triplet_loss(x1, x2, x3):
-    return (tf.reduce_mean((cos_sim(x1, x3) - cos_sim(x1, x2))) + 1) / 2
+    return (tf.reduce_mean((cos_sim(x1, x3) - cos_sim(x1, x2))) + 2) / 4
 
 
-def euc_triplet_loss(x1, x2, x3):
-    return tf.math.maximum(0, tf.reduce_mean(tf.norm((x1 - x2) + 1e-10) - tf.norm((x1 - x3) + 1e-10)) + 80)
+def euc_triplet_loss(x1, x2, x3, c):
+    return tf.math.maximum(0, tf.reduce_mean(tf.norm((x1 - x2) + 1e-5) - tf.norm((x1 - x3) + 1e-5)) + c)
 
 
 def choose_model(choice):
@@ -75,12 +75,12 @@ def data_preprocess(input, color_space, cleaning_mode):
 
 def train():
     # Model Choices
-    model = choose_model(CUSTOM)
+    model = choose_model(EFFICIENTNET)
 
     # Training Settings
     optimizer = tf.keras.optimizers.Adam()
     n_epochs = 8
-    training_choices = [GRAY, NORMALIZE]
+    training_choices = [RGB, SCALE]
     train_batch_size = 128
     test_batch_size = 540
     n_train_batches = 54210 // train_batch_size
@@ -88,15 +88,19 @@ def train():
 
     # Training Loop
     for epoch in range(n_epochs):
+        print(1)
         anchors, positives, negatives, x_1_test, x_2_test, y_test = gd.compile_triplet_datasets()
+        print(1)
         anchors, positives, negatives = unison_shuffled_copies(anchors, positives, negatives)
         anchors_converted = data_preprocess(anchors, training_choices[0], training_choices[1])
+        print(1)
         positives_converted = data_preprocess(positives, training_choices[0], training_choices[1])
         negatives_converted = data_preprocess(negatives, training_choices[0], training_choices[1])
         x1_test_converted = data_preprocess(x_1_test, training_choices[0], training_choices[1])
         x2_test_converted = data_preprocess(x_2_test, training_choices[0], training_choices[1])
         y_test = tf.squeeze(tf.convert_to_tensor(y_test, dtype=tf.float32))
         epoch_train_loss = tf.convert_to_tensor(0, dtype=tf.float32)
+        print(1)
         for train_batch in range(n_train_batches):
             with tf.GradientTape() as tape:
                 batch_start = train_batch_size * train_batch
@@ -105,6 +109,7 @@ def train():
                 neg = negatives_converted[batch_start:batch_start + train_batch_size]
                 anchor_forward, positive_forward, negative_forward = model(anc), model(pos), model(neg)
                 loss = cos_triplet_loss(anchor_forward, positive_forward, negative_forward)
+                print(loss)
                 epoch_train_loss += loss
             # Get gradients of loss wrt the weights.
             gradients = tape.gradient(loss, model.trainable_weights)
