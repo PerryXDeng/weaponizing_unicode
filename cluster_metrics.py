@@ -1,15 +1,11 @@
-from unicode_info.database import download_and_parse_unicode_clusters
-
-
 def calculate_mean_coverage(predicted_codepoints_clusters_map: dict,
-                            predicted_clusters_codepoints_map: dict) -> float:
+                            predicted_clusters_codepoints_map: dict, unicode_clusters_codepoints_map: dict) -> float:
   """
   "coverage", suited for comparing consortium clusters with predicted clusters on entire unicode
   :param predicted_clusters_codepoints_map: mapping of cluster ids to lists of codepoints
   :param predicted_codepoints_clusters_map: mapping of codepoints to cluster id
   :return:
   """
-  unicode_clusters_codepoints_map = download_and_parse_unicode_clusters()
   unicode_clusters_coverage = [_best_coverage(cluster, predicted_codepoints_clusters_map,
                                               predicted_clusters_codepoints_map)
                                for cluster in unicode_clusters_codepoints_map.values()]
@@ -17,14 +13,13 @@ def calculate_mean_coverage(predicted_codepoints_clusters_map: dict,
 
 
 def calculate_mean_iou(predicted_codepoints_clusters_map: dict,
-                       predicted_clusters_codepoints_map: dict) -> float:
+                       predicted_clusters_codepoints_map: dict, unicode_clusters_codepoints_map: dict) -> float:
   """
   mean Intersection Over Union, suited for comparing consortium clusters with clusters on just the consortium homoglyphs
   :param predicted_clusters_codepoints_map: mapping of cluster ids to lists of codepoints
   :param predicted_codepoints_clusters_map: mapping of codepoints to cluster id
   :return:
   """
-  unicode_clusters_codepoints_map = download_and_parse_unicode_clusters()
   unicode_clusters_iou = [_best_iou(cluster, predicted_codepoints_clusters_map,
                                     predicted_clusters_codepoints_map)
                           for cluster in unicode_clusters_codepoints_map.values()]

@@ -7,7 +7,7 @@ from generate_datasets import try_draw_single_font
 from train_triplet_loss_modular import floatify_and_normalize
 
 
-def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file3.pkl"):
+def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file.pkl"):
     return os.path.join(save_dir, features_dict_file)
 
 

@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 import random
 from feature_cluster_algos import CosineSimGraphClustererGPU
-
+from cluster_metrics import calculate_mean_iou
 
 def get_consortium_clusters_dict():
     url = 'https://www.unicode.org/Public/security/12.0.0/confusables.txt'
@@ -137,6 +137,7 @@ def calculate_consortium_cluster_accuracy(features_dict_file_path, cos_threshold
 
 def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, features_dict_file_path):
     consortium_clusters_dict = get_consortium_clusters_dict()
+    #print(len(consortium_clusters_dict))
     features_dict = pickle.load(open(features_dict_file_path, 'rb'))
 
     supported_consortium_feature_vectors = {}
@@ -158,12 +159,27 @@ def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, 
     return supported_consortium_feature_vectors, supported_consortium_clusters_dict
     
 
-def generate_suppported_consortium_clusters(n_clusters, unicode_minimum_font_dict_file_path, cos_threshold):
-    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors(n_clusters, unicode_minimum_font_dict_file_path)
+def generate_suppported_consortium_clusters(n_clusters, features_dict_file_path, cos_threshold):
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, features_dict_file_path)
+    #print(len(supported_consortium_feature_vectors))
+    #print(len(supported_consortium_clusters_dict))
     cos_Clusterer = CosineSimGraphClustererGPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
     codepoints_cluster_map, cluster_codepoints_map = cos_Clusterer._cluster_features_into_equivalence_classes(
         supported_consortium_feature_vectors)
+    return codepoints_cluster_map, cluster_codepoints_map, supported_consortium_clusters_dict
 
+
+def convert(dict_):
+    dict_copy = dict_.copy()
+    returner = {}
+    count = 0
+    for key,value in dict_copy.items():
+        value.append(key)
+        returner[count] = value
+        count+=1
+    return returner
 
 if __name__ == '__main__':
-    generate_consortium_clusters(100, '', .7)
+    codepoints_cluster_map, cluster_codepoints_map, supported_consortium_clusters_dict = generate_suppported_consortium_clusters(1000,'features_dict_file.pkl',.92)
+    converted_ = convert(supported_consortium_clusters_dict)
+    print(calculate_mean_iou(codepoints_cluster_map,cluster_codepoints_map, converted_))
