@@ -41,10 +41,11 @@ def try_draw_char_all_fonts(char, available_fonts, empty_image, img_size, font_s
       return img
 
 def try_draw_single_font(char, font, empty_image, img_size, font_size, path_prefix, transform_img=True):
-    img = empty_image
     path = os.path.join(path_prefix,font)
     try:
       img = drawChar(img_size, chr(char), font_size, path)
+      if (img == empty_image).all():
+        return empty_image
       if transform_img:
         img = transformImg(img)
     except (ValueError, OSError):
