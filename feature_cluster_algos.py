@@ -7,7 +7,7 @@ from generate_datasets import try_draw_single_font
 from train_triplet_loss_modular import floatify_and_normalize
 
 
-def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file.pkl"):
+def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file2.pkl"):
     return os.path.join(save_dir, features_dict_file)
 
 
@@ -82,22 +82,27 @@ class _AbstractFeatureExtractor:
         unicode_supported_fonts_drawn_dict = {}
 
         for unicode_point in unicode_font_mapping_dict.keys():
+            print(unicode_point)
             for font_path in unicode_font_mapping_dict[unicode_point]:
                 unicode_drawn = try_draw_single_font(unicode_point, font_path, empty_image, img_size, font_size,
                                                      "./fonts",
                                                      transform_img=False)
                 if not (unicode_drawn == empty_image).all():
-                    unicode_drawn_preprocessed = floatify_and_normalize(cv.cvtColor(unicode_drawn, cv.COLOR_GRAY2RGB))
+                    unicode_drawn_preprocessed = ((cv.cvtColor(unicode_drawn, cv.COLOR_GRAY2RGB) - (255 / 2)) / (255 / 2)).astype(np.float32)
                     if unicode_point not in unicode_supported_fonts_drawn_dict:
                         unicode_supported_fonts_drawn_dict[unicode_point] = {font_path: unicode_drawn_preprocessed}
                     else:
                         unicode_supported_fonts_drawn_dict[unicode_point][font_path] = unicode_drawn_preprocessed
 
+        print(len(unicode_supported_fonts_drawn_dict))
         minimum_used_fonts_dict = self.generate_minimum_used_fonts_dict(unicode_supported_fonts_drawn_dict)
         unicode_batch = {}
         unicode_feature_vectors_dict = {}
-
+        
+        print(len(minimum_used_fonts_dict))
+        
         for unicode_point in unicode_supported_fonts_drawn_dict.keys():
+            print(unicode_point)
             unicode_batch[unicode_point] = unicode_supported_fonts_drawn_dict[unicode_point][minimum_used_fonts_dict[unicode_point]]
             if len(unicode_batch) == batch_size:
                 unicode_batch_forward = loaded_model.predict(tf.convert_to_tensor(list(unicode_batch.values())))
@@ -294,5 +299,7 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-    a = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
-    a.find_and_save_equivalence_classes()
+    a = _AbstractFeatureExtractor(model_path = './model_1/', batch_size = 100, save_dir = './', multifont_mapping_path = './fonts/multifont_mapping.pkl')
+    a.extract_and_save_features()
+    #a = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
+    #a.find_and_save_equivalence_classes()
