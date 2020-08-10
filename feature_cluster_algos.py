@@ -7,7 +7,7 @@ from generate_datasets import try_draw_single_font
 from train_triplet_loss_modular import floatify_and_normalize
 
 
-def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file2.pkl"):
+def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file3.pkl"):
     return os.path.join(save_dir, features_dict_file)
 
 
@@ -93,22 +93,31 @@ class _AbstractFeatureExtractor:
                         unicode_supported_fonts_drawn_dict[unicode_point] = {font_path: unicode_drawn_preprocessed}
                     else:
                         unicode_supported_fonts_drawn_dict[unicode_point][font_path] = unicode_drawn_preprocessed
-
         print(len(unicode_supported_fonts_drawn_dict))
-        minimum_used_fonts_dict = self.generate_minimum_used_fonts_dict(unicode_supported_fonts_drawn_dict)
+        
+        if not os.path.exists('unicode_minimum_font_dict.pkl'):
+            minimum_used_fonts_dict = self.generate_minimum_used_fonts_dict(unicode_supported_fonts_drawn_dict)
+            with open('unicode_minimum_font_dict.pkl', 'wb+') as f:
+                pickle.dump(minimum_used_fonts_dict, f)
+        else:
+            minimum_used_fonts_dict_file = open('unicode_minimum_font_dict.pkl', 'rb')
+            minimum_used_fonts_dict = pickle.load(minimum_used_fonts_dict_file)
+        print(len(minimum_used_fonts_dict))
+            
         unicode_batch = {}
         unicode_feature_vectors_dict = {}
-        
-        print(len(minimum_used_fonts_dict))
-        
         for unicode_point in unicode_supported_fonts_drawn_dict.keys():
-            print(unicode_point)
             unicode_batch[unicode_point] = unicode_supported_fonts_drawn_dict[unicode_point][minimum_used_fonts_dict[unicode_point]]
             if len(unicode_batch) == batch_size:
                 unicode_batch_forward = loaded_model.predict(tf.convert_to_tensor(list(unicode_batch.values())))
                 unicode_batch = dict(zip(unicode_batch.keys(), unicode_batch_forward))
                 unicode_feature_vectors_dict.update(unicode_batch)
                 unicode_batch = {}
+        if len(unicode_batch) > 0:
+                unicode_batch_forward = loaded_model.predict(tf.convert_to_tensor(list(unicode_batch.values())))
+                unicode_batch = dict(zip(unicode_batch.keys(), unicode_batch_forward))
+                unicode_feature_vectors_dict.update(unicode_batch)
+        print(len(unicode_feature_vectors_dict))
         return unicode_feature_vectors_dict
 
     def extract_and_save_features(self):
