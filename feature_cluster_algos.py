@@ -78,21 +78,26 @@ class _AbstractFeatureExtractor:
         # Load multifont mapping dict
         multifont_mapping_file = open(multifont_mapping_path, 'rb')
         unicode_font_mapping_dict = pickle.load(multifont_mapping_file)
-
-        unicode_supported_fonts_drawn_dict = {}
-
-        for unicode_point in unicode_font_mapping_dict.keys():
-            print(unicode_point)
-            for font_path in unicode_font_mapping_dict[unicode_point]:
-                unicode_drawn = try_draw_single_font(unicode_point, font_path, empty_image, img_size, font_size,
-                                                     "./fonts",
-                                                     transform_img=False)
-                if not (unicode_drawn == empty_image).all():
-                    unicode_drawn_preprocessed = ((cv.cvtColor(unicode_drawn, cv.COLOR_GRAY2RGB) - (255 / 2)) / (255 / 2)).astype(np.float32)
-                    if unicode_point not in unicode_supported_fonts_drawn_dict:
-                        unicode_supported_fonts_drawn_dict[unicode_point] = {font_path: unicode_drawn_preprocessed}
-                    else:
-                        unicode_supported_fonts_drawn_dict[unicode_point][font_path] = unicode_drawn_preprocessed
+        
+        if os.path.exists('unicode_supported_fonts_drawn_dict.pkl'):
+            unicode_supported_fonts_drawn_dict_file = open('unicode_supported_fonts_drawn_dict.pkl', 'rb')
+            unicode_supported_fonts_drawn_dict = pickle.load(unicode_supported_fonts_drawn_dict_file)   
+        else:
+            unicode_supported_fonts_drawn_dict = {}
+            for unicode_point in unicode_font_mapping_dict.keys():
+                print(unicode_point)
+                for font_path in unicode_font_mapping_dict[unicode_point]:
+                    unicode_drawn = try_draw_single_font(unicode_point, font_path, empty_image, img_size, font_size,
+                                                         "./fonts",
+                                                         transform_img=False)
+                    if not (unicode_drawn == empty_image).all():
+                        unicode_drawn_preprocessed = ((cv.cvtColor(unicode_drawn, cv.COLOR_GRAY2RGB) - (255 / 2)) / (255 / 2)).astype(np.float32)
+                        if unicode_point not in unicode_supported_fonts_drawn_dict:
+                            unicode_supported_fonts_drawn_dict[unicode_point] = {font_path: unicode_drawn_preprocessed}
+                        else:
+                            unicode_supported_fonts_drawn_dict[unicode_point][font_path] = unicode_drawn_preprocessed
+            with open('unicode_supported_fonts_drawn_dict.pkl', 'wb+') as f:
+                pickle.dump(unicode_supported_fonts_drawn_dict, f)
         print(len(unicode_supported_fonts_drawn_dict))
         
         if not os.path.exists('unicode_minimum_font_dict.pkl'):

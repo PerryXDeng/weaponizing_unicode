@@ -133,14 +133,37 @@ def calculate_consortium_cluster_accuracy(features_dict_file_path, cos_threshold
                     if cos_sim_ > cos_threshold:
                         total_correct += 1
     print(total_correct / total_supported_puny_pairs)
+    
 
-
-def generate_consortium_clusters(n_clusters):
+def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, features_dict_file_path):
     consortium_clusters_dict = get_consortium_clusters_dict()
-    cos_Clusterer = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
+    features_dict = pickle.load(open(features_dict_file_path, 'rb'))
+
+    supported_consortium_feature_vectors = {}
+    supported_consortium_clusters_dict = {}
+    for cluster_source in consortium_clusters_dict.keys():
+        if cluster_source in features_dict:
+            supported_consortium_clusters_dict[cluster_source] = []
+            for target in consortium_clusters_dict[cluster_source]:
+                if target in features_dict:
+                    supported_consortium_clusters_dict[cluster_source].append(target)
+                    if cluster_source not in supported_consortium_feature_vectors:
+                        supported_consortium_feature_vectors[cluster_source] = features_dict[cluster_source]
+                    if target not in supported_consortium_feature_vectors:
+                        supported_consortium_feature_vectors[target] = features_dict[target]
+            if len(supported_consortium_clusters_dict[cluster_source]) == 0:
+                del supported_consortium_clusters_dict[cluster_source]
+        if len(supported_consortium_clusters_dict) == n_clusters:
+            break
+    return supported_consortium_feature_vectors, supported_consortium_clusters_dict
+    
+
+def generate_suppported_consortium_clusters(n_clusters, unicode_minimum_font_dict_file_path, cos_threshold):
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors(n_clusters, unicode_minimum_font_dict_file_path)
+    cos_Clusterer = CosineSimGraphClustererGPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
     codepoints_cluster_map, cluster_codepoints_map = cos_Clusterer._cluster_features_into_equivalence_classes(
-        consortium_clusters_dict[:n_clusters])
+        supported_consortium_feature_vectors)
 
 
 if __name__ == '__main__':
-    generate_consortium_clusters(100)
+    generate_consortium_clusters(100, '', .7)
