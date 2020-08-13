@@ -4,7 +4,8 @@ import numpy as np
 import tensorflow as tf
 import random
 from feature_cluster_algos import CosineSimGraphClustererGPU
-from cluster_metrics import calculate_mean_iou
+from cluster_metrics import calculate_mean_iou, calculate_mean_coverage
+
 
 def get_consortium_clusters_dict():
     url = 'https://www.unicode.org/Public/security/12.0.0/confusables.txt'
@@ -133,11 +134,11 @@ def calculate_consortium_cluster_accuracy(features_dict_file_path, cos_threshold
                     if cos_sim_ > cos_threshold:
                         total_correct += 1
     print(total_correct / total_supported_puny_pairs)
-    
+
 
 def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, features_dict_file_path):
     consortium_clusters_dict = get_consortium_clusters_dict()
-    #print(len(consortium_clusters_dict))
+    # print(len(consortium_clusters_dict))
     features_dict = pickle.load(open(features_dict_file_path, 'rb'))
 
     supported_consortium_feature_vectors = {}
@@ -157,12 +158,13 @@ def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, 
         if len(supported_consortium_clusters_dict) == n_clusters:
             break
     return supported_consortium_feature_vectors, supported_consortium_clusters_dict
-    
+
 
 def generate_suppported_consortium_clusters(n_clusters, features_dict_file_path, cos_threshold):
-    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, features_dict_file_path)
-    #print(len(supported_consortium_feature_vectors))
-    #print(len(supported_consortium_clusters_dict))
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
+        n_clusters, features_dict_file_path)
+    # print(len(supported_consortium_feature_vectors))
+    # print(len(supported_consortium_clusters_dict))
     cos_Clusterer = CosineSimGraphClustererGPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
     codepoints_cluster_map, cluster_codepoints_map = cos_Clusterer._cluster_features_into_equivalence_classes(
         supported_consortium_feature_vectors)
@@ -173,13 +175,143 @@ def convert(dict_):
     dict_copy = dict_.copy()
     returner = {}
     count = 0
-    for key,value in dict_copy.items():
+    for key, value in dict_copy.items():
         value.append(key)
         returner[count] = value
-        count+=1
+        count += 1
     return returner
 
+
+def _generate_adjacency_matrix(features):
+    # gpu [n, k]
+    ordered_features_gpu = np.array(features)
+    n, k = ordered_features_gpu.shape
+
+    a = ordered_features_gpu.reshape((n, 1, 1, k))
+    b = ordered_features_gpu.reshape((1, n, k, 1))
+    # [n, n]
+    dot_products = np.matmul(a, b).reshape((n, n))
+
+    # [n]
+    norms = np.linalg.norm(ordered_features_gpu, axis=1)
+
+    norms_a = norms.reshape((n, 1))
+    norms_b = norms.reshape((1, n))  # same as the above but transposed
+    # [n, n]
+    norms_prod = np.multiply(norms_a, norms_b)
+    cosine_similarity = dot_products / (norms_prod + 1e-7)
+    return cosine_similarity
+
+
+def _generate_statistics(converted_dict, features_dict_file_path):
+    features_dict = pickle.load(open(features_dict_file_path, 'rb'))
+    mean = 0
+    count = 0
+    std_dev = 0
+    for cluster in converted_dict.values():
+        ordered_features = np.empty([len(cluster), len(features_dict[cluster[0]])], dtype=np.float32)
+        for i in range(len(cluster)):
+            ordered_features[i] = features_dict[cluster[i]]
+        if len(cluster) > 2:
+            cos_matrix = _generate_adjacency_matrix(ordered_features)
+            stats = np.tril(cos_matrix, -1)
+            stats = stats[stats != 0]
+            mean += np.mean(stats)
+            std_dev += np.std(stats)
+            count += 1
+    print(mean / count)
+    print(std_dev / count)
+
+
+def normalize_rows(vector):
+    return vector / (np.linalg.norm(vector, axis=1).reshape((vector.shape[0], 1)) + 1e-8)
+
+
+def calculate_centroid(feature_vectors):
+    normalized_vectors = normalize_rows(feature_vectors)
+    centroid_ = np.sum(normalized_vectors, axis=0)
+    return normalize_rows(centroid_.reshape((1, -1)))
+
+
+def convert_to_clusters_codepoints_map(dict_):
+    a = {}
+    for key, value in dict_.items():
+        a[key] = list(value.keys())
+    return a
+
+
+def convert_to_codepoints_clusters_map(dict_):
+    returner = {}
+    for key, values in dict_.items():
+        for unicode in values:
+            returner[unicode] = key
+    return returner
+
+
+def combine_clusters(clustered_initial, target_mean, target_std_dev):
+    clustered = clustered_initial.copy()
+    cluster_key_list = list(clustered.keys())
+    i = 0
+    while i < len(cluster_key_list) - 2:
+        j = i + 1
+        deleted = []
+        while j < len(cluster_key_list) - 1:
+            feature_vector_a = np.stack(list(clustered[cluster_key_list[i]].values()))
+            feature_vector_b = np.stack(list(clustered[cluster_key_list[j]].values()))
+            cosine_similarity = cos_distance(feature_vector_a, feature_vector_b)
+            proposal_mean = np.mean(cosine_similarity)
+            proposal_std = np.std(cosine_similarity)
+            if proposal_mean > target_mean and proposal_std < target_std_dev:
+                deleted.append(cluster_key_list[j])
+                clustered[cluster_key_list[i]].update(clustered[cluster_key_list[j]])
+            j += 1
+        for d in deleted:
+            del clustered[d]
+            cluster_key_list.remove(d)
+        i += 1
+    return clustered
+
+
+def cluster_test(n_clusters):
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
+        n_clusters, 'features_dict_file.pkl')
+    ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
+    clustered = {}
+    for unicode_, feature_vect in supported_consortium_feature_vectors.items():
+        add = 0
+        for cluster_key, cluster_dict_code_feature_vector in clustered.items():
+            cluster_features = np.stack(list(cluster_dict_code_feature_vector.values()))
+            cosine_similarity = cos_distance(cluster_features, feature_vect.reshape((1, -1)))
+            adjacency_matrix = np.asarray(cosine_similarity > .92)
+            if (adjacency_matrix == True).all():
+                clustered[cluster_key][unicode_] = feature_vect
+                add = 1
+                break
+        if add == 0:
+            clustered[len(clustered)] = {unicode_: feature_vect}
+    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+
+    clustered = combine_clusters(clustered, .85, .11)
+    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+
+    clustered = combine_clusters(clustered, .85, .11)
+    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+
+
+def generate_mean_iou(cluster_predictions, ground_truth_consoritium_codepoints_map):
+    cluster_predictions_codepoints_map = convert_to_clusters_codepoints_map(cluster_predictions)
+    cluster_predictions_clusters_map = convert_to_codepoints_clusters_map(cluster_predictions_codepoints_map)
+    return calculate_mean_iou(cluster_predictions_clusters_map, cluster_predictions_codepoints_map,
+                              ground_truth_consoritium_codepoints_map)
+
+
+def test_():
+    cluster_test(100)
+
+
 if __name__ == '__main__':
-    codepoints_cluster_map, cluster_codepoints_map, supported_consortium_clusters_dict = generate_suppported_consortium_clusters(1000,'features_dict_file.pkl',.92)
-    converted_ = convert(supported_consortium_clusters_dict)
-    print(calculate_mean_iou(codepoints_cluster_map,cluster_codepoints_map, converted_))
+    test_()
+
+# 0.7676019966602325
+# 0.09354372407930593
+# .4311, .435, .44
