@@ -248,7 +248,15 @@ def convert_to_codepoints_clusters_map(dict_):
     return returner
 
 
-def combine_clusters(clustered_initial, target_mean, target_std_dev):
+def cos_sim_matrix(matrix_a, matrix_b):
+    cos_sim = []
+    for x_ in matrix_a:
+        for y_ in matrix_b:
+            cos_sim.append(np.matmul(x_, y_) / (np.linalg.norm(x_) * np.linalg.norm(y_)))
+    return cos_sim
+
+
+def combine_clusters(clustered_initial, target_thresh):
     clustered = clustered_initial.copy()
     cluster_key_list = list(clustered.keys())
     i = 0
@@ -258,7 +266,33 @@ def combine_clusters(clustered_initial, target_mean, target_std_dev):
         while j < len(cluster_key_list) - 1:
             feature_vector_a = np.stack(list(clustered[cluster_key_list[i]].values()))
             feature_vector_b = np.stack(list(clustered[cluster_key_list[j]].values()))
-            cosine_similarity = cos_distance(feature_vector_a, feature_vector_b)
+            cosine_similarity = cos_sim_matrix(feature_vector_a,
+                                               feature_vector_b)
+            if cosine_similarity > target_thresh.all():
+                deleted.append(cluster_key_list[j])
+                clustered[cluster_key_list[i]].update(clustered[cluster_key_list[j]])
+            j += 1
+        for d in deleted:
+            del clustered[d]
+            cluster_key_list.remove(d)
+        i += 1
+    return clustered
+
+
+def combine_clusters_adj(clustered_initial, target_mean, target_std_dev):
+    clustered = clustered_initial.copy()
+    cluster_key_list = list(clustered.keys())
+    i = 0
+    while i < len(cluster_key_list) - 2:
+        j = i + 1
+        deleted = []
+        while j < len(cluster_key_list) - 1:
+            feature_vector_a = np.stack(list(clustered[cluster_key_list[i]].values()))
+            feature_vector_b = np.stack(list(clustered[cluster_key_list[j]].values()))
+            stacked_features = np.concatenate((feature_vector_a,feature_vector_b))
+            cos_matrix = _generate_adjacency_matrix(stacked_features)
+            cosine_similarity = np.tril(cos_matrix, -1)
+            cosine_similarity = cosine_similarity[cosine_similarity != 0]
             proposal_mean = np.mean(cosine_similarity)
             proposal_std = np.std(cosine_similarity)
             if proposal_mean > target_mean and proposal_std < target_std_dev:
@@ -272,7 +306,7 @@ def combine_clusters(clustered_initial, target_mean, target_std_dev):
     return clustered
 
 
-def cluster_test(n_clusters):
+def cluster_test(n_clusters, m, s, t):
     supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
         n_clusters, 'features_dict_file.pkl')
     ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
@@ -281,21 +315,20 @@ def cluster_test(n_clusters):
         add = 0
         for cluster_key, cluster_dict_code_feature_vector in clustered.items():
             cluster_features = np.stack(list(cluster_dict_code_feature_vector.values()))
-            cosine_similarity = cos_distance(cluster_features, feature_vect.reshape((1, -1)))
-            adjacency_matrix = np.asarray(cosine_similarity > .92)
+            feature_vect_reshaped = feature_vect.reshape((1, -1))
+            cosine_similarity = cos_distance(cluster_features, feature_vect_reshaped)
+            adjacency_matrix = np.asarray(cosine_similarity > t)
             if (adjacency_matrix == True).all():
                 clustered[cluster_key][unicode_] = feature_vect
                 add = 1
                 break
         if add == 0:
             clustered[len(clustered)] = {unicode_: feature_vect}
-    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
-
-    clustered = combine_clusters(clustered, .85, .11)
-    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
-
-    clustered = combine_clusters(clustered, .85, .11)
-    print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+    
+    #print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+    clustered = combine_clusters_adj(clustered, m, s)
+    print(m,s,t,generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+    print()
 
 
 def generate_mean_iou(cluster_predictions, ground_truth_consoritium_codepoints_map):
@@ -306,12 +339,25 @@ def generate_mean_iou(cluster_predictions, ground_truth_consoritium_codepoints_m
 
 
 def test_():
-    cluster_test(100)
+    mean = [.72,.75,.78]
+    std = [.01,.02,.03]
+    thresh = [.9,.92,.94]
+    for m in mean:
+        for s in std:
+            for t in thresh:
+                cluster_test(100, m, s, t)
 
+
+
+def run():
+    cluster_test(10,.72, .01, .94)
+    cluster_test(100,.72, .01, .94)
+    cluster_test(500,.72, .01, .94)
 
 if __name__ == '__main__':
-    test_()
+    run()
 
-# 0.7676019966602325
-# 0.09354372407930593
+# 0.767601996660232
+# 0.0935437240793059
 # .4311, .435, .44
+# .410 .75, .02
