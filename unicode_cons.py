@@ -1,8 +1,10 @@
 import requests
 import pickle
 import numpy as np
+import cupy as cp
 import tensorflow as tf
 import random
+
 from feature_cluster_algos import CosineSimGraphClustererGPU
 from cluster_metrics import calculate_mean_iou, calculate_mean_coverage
 
@@ -184,23 +186,23 @@ def convert(dict_):
 
 def _generate_adjacency_matrix(features):
     # gpu [n, k]
-    ordered_features_gpu = np.array(features)
+    ordered_features_gpu = cp.array(features)
     n, k = ordered_features_gpu.shape
 
     a = ordered_features_gpu.reshape((n, 1, 1, k))
     b = ordered_features_gpu.reshape((1, n, k, 1))
     # [n, n]
-    dot_products = np.matmul(a, b).reshape((n, n))
+    dot_products = cp.matmul(a, b).reshape((n, n))
 
     # [n]
-    norms = np.linalg.norm(ordered_features_gpu, axis=1)
+    norms = cp.linalg.norm(ordered_features_gpu, axis=1)
 
     norms_a = norms.reshape((n, 1))
     norms_b = norms.reshape((1, n))  # same as the above but transposed
     # [n, n]
-    norms_prod = np.multiply(norms_a, norms_b)
+    norms_prod = cp.multiply(norms_a, norms_b)
     cosine_similarity = dot_products / (norms_prod + 1e-7)
-    return cosine_similarity
+    return cp.asnumpy(cosine_similarity)
 
 
 def _generate_statistics(converted_dict, features_dict_file_path):
@@ -289,7 +291,7 @@ def combine_clusters_adj(clustered_initial, target_mean, target_std_dev):
         while j < len(cluster_key_list) - 1:
             feature_vector_a = np.stack(list(clustered[cluster_key_list[i]].values()))
             feature_vector_b = np.stack(list(clustered[cluster_key_list[j]].values()))
-            stacked_features = np.concatenate((feature_vector_a,feature_vector_b))
+            stacked_features = np.concatenate((feature_vector_a, feature_vector_b))
             cos_matrix = _generate_adjacency_matrix(stacked_features)
             cosine_similarity = np.tril(cos_matrix, -1)
             cosine_similarity = cosine_similarity[cosine_similarity != 0]
@@ -324,10 +326,9 @@ def cluster_test(n_clusters, m, s, t):
                 break
         if add == 0:
             clustered[len(clustered)] = {unicode_: feature_vect}
-    
-    #print(generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+
     clustered = combine_clusters_adj(clustered, m, s)
-    print(m,s,t,generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+    print(m, s, t, generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
     print()
 
 
@@ -338,21 +339,47 @@ def generate_mean_iou(cluster_predictions, ground_truth_consoritium_codepoints_m
                               ground_truth_consoritium_codepoints_map)
 
 
-def test_():
-    mean = [.72,.75,.78]
-    std = [.01,.02,.03]
-    thresh = [.9,.92,.94]
-    for m in mean:
-        for s in std:
-            for t in thresh:
-                cluster_test(100, m, s, t)
+def cluster_test_with_random_characters(n_clusters, m, s, t, target_random_characters):
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
+        n_clusters, 'features_dict_file.pkl')
+    clusters_unicode_characters = list(supported_consortium_feature_vectors.keys())
 
+    unicode_median_feature_vector_dict = pickle.load(open('features_dict_file.pkl', 'rb'))
+    all_unicode_characters = list(unicode_median_feature_vector_dict.keys())
+
+    added_random_characters = 0
+    while added_random_characters < target_random_characters:
+        possible_random_character = all_unicode_characters.pop(random.randint(0, len(all_unicode_characters) - 1))
+        if possible_random_character not in clusters_unicode_characters:
+            supported_consortium_feature_vectors[possible_random_character] = unicode_median_feature_vector_dict[
+                possible_random_character]
+            added_random_characters += 1
+
+    ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
+    clustered = {}
+    for unicode_, feature_vect in supported_consortium_feature_vectors.items():
+        add = 0
+        for cluster_key, cluster_dict_code_feature_vector in clustered.items():
+            cluster_features = np.stack(list(cluster_dict_code_feature_vector.values()))
+            feature_vect_reshaped = feature_vect.reshape((1, -1))
+            cosine_similarity = cos_distance(cluster_features, feature_vect_reshaped)
+            adjacency_matrix = np.asarray(cosine_similarity > t)
+            if (adjacency_matrix == True).all():
+                clustered[cluster_key][unicode_] = feature_vect
+                add = 1
+                break
+        if add == 0:
+            clustered[len(clustered)] = {unicode_: feature_vect}
+
+    clustered = combine_clusters_adj(clustered, m, s)
+    print(target_random_characters, generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
+    print()
 
 
 def run():
-    cluster_test(10,.72, .01, .94)
-    cluster_test(100,.72, .01, .94)
-    cluster_test(500,.72, .01, .94)
+    cluster_test(100000, .72, .01, .94)
+    cluster_test_with_random_characters(100000, .72, .01, .94, 1000)
+
 
 if __name__ == '__main__':
     run()
