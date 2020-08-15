@@ -94,6 +94,14 @@ def comparison():
   supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(9999, 'features_dict_file.pkl')
   ground_truth_consortium_codepoints_map = convert(supported_consortium_clusters_dict)
 
+  min_supported_fonts_dict = pickle.load(open('min_supported_fonts.pkl', 'rb'))
+  
+  # Load model input info
+  model_info_file = open(os.path.join('model_1', 'model_info.pkl'), 'rb')
+  model_info_dict = pickle.load(model_info_file)
+  img_size, font_size = model_info_dict['img_size'], model_info_dict['font_size']
+  empty_image = np.full((img_size, img_size), 255)
+
   positive_pairs = generate_negative_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
   negative_pairs = generate_negative_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
   pairs = positive_pairs + negative_pairs
@@ -107,7 +115,7 @@ def comparison():
   for i in range(num_pairs * 2):
     code_x, code_y = pairs[i]
     features_x, features_y = supported_consortium_feature_vectors[code_x], supported_consortium_feature_vectors[code_y]
-    glyph_x, glyph_y = None, None
+    glyph_x, glyph_y = try_draw_single_font(code_x, min_supported_fonts_dict[code_x], empty_image, img_size, "./fonts", transform_img=False), try_draw_single_font(code_y, min_supported_fonts_dict[code_y], empty_image, img_size, "./fonts", transform_img=False)
     cosine_similarities[i] = np.dot(features_x, features_y) / (np.linalg.norm(features_x) * np.linalg.norm(features_y))
     normalized_compression_distances[i] = ncd_ndarray(glyph_x, glyph_y)
 
