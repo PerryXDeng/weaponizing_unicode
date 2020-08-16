@@ -43,15 +43,15 @@ def generate_positive_pairs_consortium(unicode_clusters_codepoints_map: dict, nu
 
     clusters_codepoints_map: mapping of cluster ids to lists of codepoints
     """
-    reverse_mapping = {codepoint: cluster for cluster in unicode_clusters_codepoints_map.values() for codepoint in
-                       cluster}
+    reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
+                       unicode_clusters_codepoints_map[cluster_id]}
     codepoints = list(reverse_mapping.keys())
     l = [None] * num_pairs
     for i in range(num_pairs):
         code_a = codepoints[random.randint(0, len(codepoints) - 1)]
         code_b = code_a
+        homoglyphs = unicode_clusters_codepoints_map[reverse_mapping[code_a]]
         while code_b == code_a:
-            homoglyphs = unicode_clusters_codepoints_map[reverse_mapping[code_a]]
             code_b = homoglyphs[random.randint(0, len(homoglyphs) - 1)]
         l[i] = (code_a, code_b)
     return l
@@ -63,8 +63,8 @@ def generate_negative_pairs_consortium(unicode_clusters_codepoints_map: dict, nu
 
     clusters_codepoints_map: mapping of cluster ids to lists of codepoints
     """
-    reverse_mapping = {codepoint: cluster for cluster in unicode_clusters_codepoints_map.values() for codepoint in
-                       cluster}
+    reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
+                       unicode_clusters_codepoints_map[cluster_id]}
     codepoints = list(reverse_mapping.keys())
     l = [None] * num_pairs
     for i in range(num_pairs):
@@ -82,18 +82,20 @@ def train_svm_generate_statistics_and_auc(measures: np.ndarray, labels: np.ndarr
     dim labels = [n], dtype = int
     """
     classifier = svm.SVC(kernel='linear')
-    measures = normalize(measures.reshape(-1, 1))
-    y_score = classifier.fit(measures, labels).decision_function(labels)
-
+    measures = measures.reshape(-1, 1)# dim [n, 1]
+    classifier.fit(measures, labels)
+    print("Accuracy: {0:0.2f}".format(classifier.score(measures, labels)))
+    y_score = classifier.decision_function(measures)
     average_precision = average_precision_score(labels, y_score)
-    disp = plot_precision_recall_curve(classifier, labels, y_score)
     print('Average precision-recall score: {0:0.2f}'.format(
         average_precision))
+    plt.rcParams.update({'font.size': 22})
+    disp = plot_precision_recall_curve(classifier, measures, labels)
     plt.show()
 
 
 def comparison():
-    num_pairs = 100
+    num_pairs = 1000
 
     supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
         9999, 'features_dict_file.pkl')
@@ -107,30 +109,24 @@ def comparison():
     img_size, font_size = model_info_dict['img_size'], model_info_dict['font_size']
     empty_image = np.full((img_size, img_size), 255)
 
-    positive_pairs = generate_negative_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
+    positive_pairs = generate_positive_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
     negative_pairs = generate_negative_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
     pairs = positive_pairs + negative_pairs
 
-    labels = np.zeros(2000, dtype=int)
-    labels[0:1000] = 1
+    labels = np.zeros(num_pairs * 2, dtype=int)
+    labels[0:num_pairs] = 1
 
     cosine_similarities = np.empty(num_pairs * 2, dtype=float)
     normalized_compression_distances = np.empty(num_pairs * 2, dtype=float)
 
     for i in range(num_pairs * 2):
         code_x, code_y = pairs[i]
-        features_x, features_y = supported_consortium_feature_vectors[code_x], supported_consortium_feature_vectors[
-            code_y]
-        glyph_x, glyph_y = try_draw_single_font(int(code_x), min_supported_fonts_dict[code_x], empty_image, img_size,
-                                                font_size,
-                                                "./fonts", transform_img=False), try_draw_single_font(int(code_y),
-                                                                                                      min_supported_fonts_dict[
-                                                                                                          code_y],
-                                                                                                      empty_image,
-                                                                                                      img_size,
-                                                                                                      font_size,
-                                                                                                      "./fonts",
-                                                                                                      transform_img=False)
+        features_x = supported_consortium_feature_vectors[code_x]
+        features_y = supported_consortium_feature_vectors[code_y]
+        glyph_x = try_draw_single_font(int(code_x), min_supported_fonts_dict[code_x], empty_image, img_size,
+                                                font_size, "./fonts", transform_img=False)
+        glyph_y = try_draw_single_font(int(code_y), min_supported_fonts_dict[code_y], empty_image, img_size,
+                                                font_size, "./fonts", transform_img=False)
         cosine_similarities[i] = np.dot(features_x, features_y) / (
                 np.linalg.norm(features_x) * np.linalg.norm(features_y))
         normalized_compression_distances[i] = ncd_ndarray(glyph_x, glyph_y)
