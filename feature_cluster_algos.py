@@ -131,6 +131,25 @@ class EfficientNetFeatureExtractor:
             pickle.dump(features_dict, f)
 
 
+def cosine_similarity_matrix_cpu(features:np.ndarray) -> np.ndarray:
+    n, k = features.shape
+
+    a_ = features.reshape((n, 1, 1, k))
+    b_ = features.reshape((1, n, k, 1))
+    # [n, n]
+    dot_products = np.matmul(a_, b_).reshape((n, n))
+
+    # [n]
+    norms = np.linalg.norm(features, axis=1)
+
+    norms_a = norms.reshape((n, 1))
+    norms_b = norms.reshape((1, n))
+    # [n, n]
+    norms_prod = np.multiply(norms_a, norms_b)
+    cosine_similarity = dot_products / norms_prod
+    return cosine_similarity
+
+
 class _AbstractFeatureClusterer:
     def __init__(self, save_dir: str):
         self.sd = save_dir
@@ -227,28 +246,29 @@ class CosineSimGraphClustererCPU(_AbstractGraphClusterer):
     def _generate_adjacency_matrix(self, features: np.ndarray):
         # gpu [n, k]
         # CP CHANGE
-        ordered_features_gpu = np.array(features)
-        n, k = ordered_features_gpu.shape
+        # features = np.array(features)
+        n, k = features.shape
 
-        a = ordered_features_gpu.reshape((n, 1, 1, k))
-        b = ordered_features_gpu.reshape((1, n, k, 1))
+        a = features.reshape((n, 1, 1, k))
+        b = features.reshape((1, n, k, 1))
         # [n, n]
         # CP CHANGE
         dot_products = np.matmul(a, b).reshape((n, n))
 
         # [n]
         # CP CHANGE
-        norms = np.linalg.norm(ordered_features_gpu, axis=1)
+        norms = np.linalg.norm(features, axis=1)
 
         norms_a = norms.reshape((n, 1))
         norms_b = norms.reshape((1, n))  # same as the above but transposed
         # [n, n]
         # CP CHANGE
         norms_prod = np.multiply(norms_a, norms_b)
-        cosine_similarity = dot_products / (norms_prod + self.epsilon)
+        self.cosine_similarity = dot_products / (norms_prod + self.epsilon)
         # cpu [n, n]
         # CP CHANGE
-        adjacency_matrix = (cosine_similarity > self.threshold)
+        # adjacency_matrix = np.array(cosine_similarity > self.threshold)
+        adjacency_matrix = (self.cosine_similarity > self.threshold)
         return adjacency_matrix
 
 
