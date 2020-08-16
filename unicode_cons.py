@@ -6,7 +6,7 @@ import tensorflow as tf
 import random
 
 from feature_cluster_algos import CosineSimGraphClustererCPU
-from cluster_metrics import calculate_mean_iou, calculate_mean_coverage
+from cluster_metrics import calculate_mean_iou, calculate_mean_coverage, calculate_mean_precision
 
 
 def get_consortium_clusters_dict():
@@ -308,7 +308,7 @@ def combine_clusters_adj(clustered_initial, target_mean, target_std_dev):
     return clustered
 
 
-def cluster_test(n_clusters, m, s, t):
+def cluster_test(n_clusters, target_mean, target_std_dev, target_threshold):
     supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
         n_clusters, 'features_dict_file.pkl')
     ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
@@ -319,7 +319,7 @@ def cluster_test(n_clusters, m, s, t):
             cluster_features = np.stack(list(cluster_dict_code_feature_vector.values()))
             feature_vect_reshaped = feature_vect.reshape((1, -1))
             cosine_similarity = cos_distance(cluster_features, feature_vect_reshaped)
-            adjacency_matrix = np.asarray(cosine_similarity > t)
+            adjacency_matrix = np.asarray(cosine_similarity > target_threshold)
             if (adjacency_matrix == True).all():
                 clustered[cluster_key][unicode_] = feature_vect
                 add = 1
@@ -327,19 +327,12 @@ def cluster_test(n_clusters, m, s, t):
         if add == 0:
             clustered[len(clustered)] = {unicode_: feature_vect}
 
-    clustered = combine_clusters_adj(clustered, m, s)
-    print(m, s, t, generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
-    print()
+    clustered = combine_clusters_adj(clustered, target_mean, target_std_dev)
+    return clustered, ground_truth_consoritium_codepoints_map
 
 
-def generate_mean_iou(cluster_predictions, ground_truth_consoritium_codepoints_map):
-    cluster_predictions_codepoints_map = convert_to_clusters_codepoints_map(cluster_predictions)
-    cluster_predictions_clusters_map = convert_to_codepoints_clusters_map(cluster_predictions_codepoints_map)
-    return calculate_mean_iou(cluster_predictions_clusters_map, cluster_predictions_codepoints_map,
-                              ground_truth_consoritium_codepoints_map)
 
-
-def cluster_test_with_random_characters(n_clusters, m, s, t, target_random_characters):
+def cluster_test_with_random_characters(n_clusters, target_mean, target_std_dev, target_threshold, target_random_characters):
     supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
         n_clusters, 'features_dict_file.pkl')
     clusters_unicode_characters = list(supported_consortium_feature_vectors.keys())
@@ -363,7 +356,7 @@ def cluster_test_with_random_characters(n_clusters, m, s, t, target_random_chara
             cluster_features = np.stack(list(cluster_dict_code_feature_vector.values()))
             feature_vect_reshaped = feature_vect.reshape((1, -1))
             cosine_similarity = cos_distance(cluster_features, feature_vect_reshaped)
-            adjacency_matrix = np.asarray(cosine_similarity > t)
+            adjacency_matrix = np.asarray(cosine_similarity > target_threshold)
             if (adjacency_matrix == True).all():
                 clustered[cluster_key][unicode_] = feature_vect
                 add = 1
@@ -371,20 +364,26 @@ def cluster_test_with_random_characters(n_clusters, m, s, t, target_random_chara
         if add == 0:
             clustered[len(clustered)] = {unicode_: feature_vect}
 
-    clustered = combine_clusters_adj(clustered, m, s)
-    print(target_random_characters, generate_mean_iou(clustered, ground_truth_consoritium_codepoints_map))
-    print()
+    clustered = combine_clusters_adj(clustered, target_mean, target_std_dev)
+    return clustered, ground_truth_consoritium_codepoints_map
 
 
-def run():
-    cluster_test(100000, .72, .01, .94)
-    cluster_test_with_random_characters(100000, .72, .01, .94, 1000)
+def generate_mean_IOU_mean_precision(cluster_predictions, ground_truth_consoritium_codepoints_map):
+    cluster_predictions_codepoints_map = convert_to_clusters_codepoints_map(cluster_predictions)
+    cluster_predictions_clusters_map = convert_to_codepoints_clusters_map(cluster_predictions_codepoints_map)
+    return calculate_mean_iou(cluster_predictions_clusters_map, cluster_predictions_codepoints_map,
+                              ground_truth_consoritium_codepoints_map), calculate_mean_precision(cluster_predictions_clusters_map, cluster_predictions_codepoints_map,
+                              ground_truth_consoritium_codepoints_map)
+
+
+def calculate_predicted_clusters_IOU_precision():
+    clustered, ground_truth_consoritium_codepoints_map = cluster_test_with_random_characters(100000, .72, .01, .94, 1000)
+    mean_IOU, mean_precision = generate_mean_IOU_mean_precision(clustered, ground_truth_consoritium_codepoints_map)
 
 
 if __name__ == '__main__':
-    run()
+    calculate_predicted_clusters_IOU_precision()
 
-# 0.767601996660232
-# 0.0935437240793059
-# .4311, .435, .44
-# .410 .75, .02
+# Ground Truth Mean: 0.767601996660232
+# Ground Truth Std: 0.0935437240793059
+# Optimized parameters: .72,.01,.94
