@@ -5,7 +5,7 @@ import cupy as cp
 import tensorflow as tf
 import random
 
-from feature_cluster_algos import CosineSimGraphClustererGPU
+from feature_cluster_algos import CosineSimGraphClustererCPU
 from cluster_metrics import calculate_mean_iou, calculate_mean_coverage
 
 
@@ -167,7 +167,7 @@ def generate_suppported_consortium_clusters(n_clusters, features_dict_file_path,
         n_clusters, features_dict_file_path)
     # print(len(supported_consortium_feature_vectors))
     # print(len(supported_consortium_clusters_dict))
-    cos_Clusterer = CosineSimGraphClustererGPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
+    cos_Clusterer = CosineSimGraphClustererCPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
     codepoints_cluster_map, cluster_codepoints_map = cos_Clusterer._cluster_features_into_equivalence_classes(
         supported_consortium_feature_vectors)
     return codepoints_cluster_map, cluster_codepoints_map, supported_consortium_clusters_dict

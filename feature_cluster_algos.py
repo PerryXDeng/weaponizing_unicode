@@ -218,7 +218,7 @@ class _AbstractGraphClusterer(_AbstractFeatureClusterer):
         return codepoints_cluster_map, cluster_codepoints_map
 
 
-class CosineSimGraphClustererGPU(_AbstractGraphClusterer):
+class CosineSimGraphClustererCPU(_AbstractGraphClusterer):
     def __init__(self, save_dir: str, threshold: float, epsilon: float):
         super().__init__(save_dir)
         self.threshold = threshold
@@ -248,7 +248,7 @@ class CosineSimGraphClustererGPU(_AbstractGraphClusterer):
         cosine_similarity = dot_products / (norms_prod + self.epsilon)
         # cpu [n, n]
         # CP CHANGE
-        adjacency_matrix = np.asarray(cosine_similarity > self.threshold)
+        adjacency_matrix = (cosine_similarity > self.threshold)
         return adjacency_matrix
 
 
