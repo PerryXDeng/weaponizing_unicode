@@ -19,7 +19,7 @@ def generate_cluster_codepoints_map_file_path(save_dir: str): return os.path.joi
                                                                                   "codepoints_cluster_map.pkl")
 
 
-class _AbstractFeatureExtractor:
+class EfficientNetFeatureExtractor:
     def __init__(self, model_path: str, batch_size: int, save_dir: str, multifont_mapping_path: str):
         self.mp = model_path
         self.bs = batch_size
@@ -313,7 +313,7 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-    a = _AbstractFeatureExtractor(model_path = './model_1/', batch_size = 100, save_dir = './', multifont_mapping_path = './fonts/multifont_mapping.pkl')
+    a = EfficientNetFeatureExtractor(model_path ='./model_1/', batch_size = 100, save_dir ='./', multifont_mapping_path ='./fonts/multifont_mapping.pkl')
     a.extract_and_save_features()
     #a = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
     #a.find_and_save_equivalence_classes()
