@@ -9,6 +9,10 @@ __DB = "https://www.unicode.org/Public/UCD/latest/ucd/"
 
 from typing import *
 import urllib.request
+import requests
+import pickle
+import numpy as np
+import random
 
 # inclusive decimal range of a unicode subset
 __UnicodeRange = Tuple[int, int]
@@ -18,16 +22,123 @@ __UnicodeBlocks = Dict[str, __UnicodeRange]
 # blocks with implemented characters
 __UnicodeMap = List[str]
 
-UNDEFINED_BLOCK = "undefined" # for indicating that a character is not defined
+UNDEFINED_BLOCK = "undefined"  # for indicating that a character is not defined
 
 
-# TODO: implement this
-def download_and_parse_unicode_clusters() -> dict:
-  """
-  https://www.unicode.org/Public/security/latest/confusables.txt
-  :return: {cluster_id: list of unicode codepoints}
-  """
-  raise NotImplementedError
+def get_consortium_clusters_dict():
+  url = 'https://www.unicode.org/Public/security/12.0.0/confusables.txt'
+  # Load Text File
+  r = requests.get(url, allow_redirects=True)
+  punycodes_list = r.text[385:].split("\n")
+  punycodes_list = punycodes_list[:len(punycodes_list) - 3]
+  # 4248 pairs
+  # 3353 we support :(
+  consortium_clusters_dict = {}
+  for i in punycodes_list:
+    if i is not '':
+      punycode_pair = i.split(";")[:2]
+      if len(punycode_pair[1]) < 8:
+        source = str(int(punycode_pair[0].replace(' ', ''), 16))
+        target = str(int(punycode_pair[1].replace(' ', '').replace('\t', ''), 16))
+        if target not in consortium_clusters_dict:
+          consortium_clusters_dict[target] = [source]
+        else:
+          consortium_clusters_dict[target].append(source)
+  return consortium_clusters_dict
+
+
+def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters: int, features_dict_file_path: str):
+  consortium_clusters_dict = get_consortium_clusters_dict()
+  # print(len(consortium_clusters_dict))
+  features_dict = pickle.load(open(features_dict_file_path, 'rb'))
+  supported_consortium_feature_vectors = {}
+  supported_consortium_clusters_dict = {}
+  for cluster_source in consortium_clusters_dict.keys():
+    if cluster_source in features_dict:
+      supported_consortium_clusters_dict[cluster_source] = []
+      for target in consortium_clusters_dict[cluster_source]:
+        if target in features_dict:
+          supported_consortium_clusters_dict[cluster_source].append(target)
+          if cluster_source not in supported_consortium_feature_vectors:
+            supported_consortium_feature_vectors[cluster_source] = features_dict[cluster_source]
+          if target not in supported_consortium_feature_vectors:
+            supported_consortium_feature_vectors[target] = features_dict[target]
+      if len(supported_consortium_clusters_dict[cluster_source]) == 0:
+        del supported_consortium_clusters_dict[cluster_source]
+    if len(supported_consortium_clusters_dict) == n_clusters:
+      break
+  reformatted = {}
+  count = 0
+  for key, value in supported_consortium_clusters_dict.items():
+    value.append(key)
+    reformatted[count] = value
+    count += 1
+  supported_consortium_clusters_dict = reformatted
+  return supported_consortium_feature_vectors, supported_consortium_clusters_dict
+
+
+def generate_data_for_experiment(num_random_additions: int = 0):
+  supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
+    9999, 'features_dict_file.pkl')
+  clusters_unicode_characters = list(supported_consortium_feature_vectors.keys())
+  unicode_median_feature_vector_dict = pickle.load(open('features_dict_file.pkl', 'rb'))
+  all_unicode_characters = list(unicode_median_feature_vector_dict.keys())
+  for _ in range(num_random_additions):
+    possible_random_character = all_unicode_characters.pop(random.randint(0, len(all_unicode_characters) - 1))
+    if possible_random_character not in clusters_unicode_characters:
+      supported_consortium_feature_vectors[possible_random_character] = unicode_median_feature_vector_dict[
+        possible_random_character]
+  return supported_consortium_feature_vectors, supported_consortium_clusters_dict
+
+
+def _generate_statistics(converted_dict, features_dict_file_path):
+  import cupy as cp
+  def _generate_adjacency_matrix(features):
+    # gpu [n, k]
+    ordered_features_gpu = cp.array(features)
+    n, k = ordered_features_gpu.shape
+
+    a = ordered_features_gpu.reshape((n, 1, 1, k))
+    b = ordered_features_gpu.reshape((1, n, k, 1))
+    # [n, n]
+    dot_products = cp.matmul(a, b).reshape((n, n))
+
+    # [n]
+    norms = cp.linalg.norm(ordered_features_gpu, axis=1)
+
+    norms_a = norms.reshape((n, 1))
+    norms_b = norms.reshape((1, n))  # same as the above but transposed
+    # [n, n]
+    norms_prod = cp.multiply(norms_a, norms_b)
+    cosine_similarity = dot_products / (norms_prod + 1e-7)
+    return cp.asnumpy(cosine_similarity)
+  features_dict = pickle.load(open(features_dict_file_path, 'rb'))
+  mean = 0
+  count = 0
+  std_dev = 0
+  for cluster in converted_dict.values():
+    ordered_features = np.empty([len(cluster), len(features_dict[cluster[0]])], dtype=np.float32)
+    for i in range(len(cluster)):
+      ordered_features[i] = features_dict[cluster[i]]
+    if len(cluster) > 2:
+      cos_matrix = _generate_adjacency_matrix(ordered_features)
+      stats = np.tril(cos_matrix, -1)
+      stats = stats[stats != 0]
+      mean += np.mean(stats)
+      std_dev += np.std(stats)
+      count += 1
+  print(mean / count)
+  print(std_dev / count)
+
+
+# def normalize_rows(vector):
+#     return vector / (np.linalg.norm(vector, axis=1).reshape((vector.shape[0], 1)) + 1e-8)
+#
+#
+# def calculate_centroid(feature_vectors):
+#     normalized_vectors = normalize_rows(feature_vectors)
+#     centroid_ = np.sum(normalized_vectors, axis=0)
+#     return normalize_rows(centroid_.reshape((1, -1)))
 
 
 def _is_character_block(block_name: str) -> bool:
@@ -84,21 +195,21 @@ def map_blocks() -> (__UnicodeBlocks, __UnicodeMap, int):
   return blocks, block_map, n
 
 
-def _is_code_range(description:str) -> int:
+def _is_code_range(description: str) -> int:
   """
   determines whether an entry is a code point or the start/end of a range
   :param description: entry description, second field in line
   :return: -1 if it's a code point, 0 if it's first in a range, 1 if it's last
   """
   if len(description) > 4:
-    if description[-4:] == "rst>": # first in range, inclusive
+    if description[-4:] == "rst>":  # first in range, inclusive
       return 0
-    if description[-4:] == "ast>": # last in range, inclusive
+    if description[-4:] == "ast>":  # last in range, inclusive
       return 1
   return -1
 
 
-def _prune_block_map(block_map:__UnicodeMap):
+def _prune_block_map(block_map: __UnicodeMap):
   """
   goes through the block map and "un-define" the blocks for characters
   that are not actually implemented
@@ -113,8 +224,8 @@ def _prune_block_map(block_map:__UnicodeMap):
     while i < len(lines):
       line = lines[i].strip()
       fields = line.split(";")
-      if len(line) > 0 and fields[1] != "<control>"\
-              and _is_character_block(fields[1]):
+      if len(line) > 0 and fields[1] != "<control>" \
+          and _is_character_block(fields[1]):
         index = int(fields[0], 16)
         retval = _is_code_range(fields[1])
         if retval == -1:

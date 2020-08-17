@@ -2,7 +2,6 @@ import argparse
 import datetime
 import os
 import sys
-import time
 import pickle
 import math
 import numpy as np
@@ -392,7 +391,7 @@ if __name__ == '__main__':
   else:
     train_tune_cli()
 
-
+# import time
 # def train_for_num_seconds(loss_fn, model, optimizer, triplet_dataset, epsilon, num_seconds, debug_nan, regularization_loss):
 #   """
 #
