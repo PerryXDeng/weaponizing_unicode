@@ -158,7 +158,7 @@ class _AbstractFeatureClusterer:
         with open(generate_features_dict_file_path(self.sd), 'rb') as f:
             self.features_dict = pickle.load(f)
 
-    def _cluster_features_into_equivalence_classes(self, features_dict: dict) -> (dict, dict):
+    def cluster_features_into_equivalence_classes(self, features_dict: dict) -> (dict, dict):
         """
         *
         :param features_dict: keys are codepoint integers, values are numpy arrays of identical dimension
@@ -167,7 +167,7 @@ class _AbstractFeatureClusterer:
         raise NotImplementedError
 
     def find_and_save_equivalence_classes(self):
-        codepoints_cluster_map, cluster_codepoints_map = self._cluster_features_into_equivalence_classes(
+        codepoints_cluster_map, cluster_codepoints_map = self.cluster_features_into_equivalence_classes(
             self.features_dict)
         with open(generate_codepoints_cluster_map_file_path(self.sd), 'wb+') as f:
             pickle.dump(codepoints_cluster_map, f)
@@ -217,7 +217,7 @@ class _AbstractGraphClusterer(_AbstractFeatureClusterer):
     def _generate_adjacency_matrix(self, features: np.ndarray):
         raise NotImplementedError
 
-    def _cluster_features_into_equivalence_classes(self, features_dict: dict) -> (dict, dict):
+    def cluster_features_into_equivalence_classes(self, features_dict: dict) -> (dict, dict):
         """
         *
         :param features_dict: keys are codepoint integers, values are numpy arrays of identical dimension
@@ -339,7 +339,7 @@ if __name__ == "__main__":
         100000, 'features_dict_file.pkl')
     ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
     Cluster_Algo = CosineSimGraphClustererCPU(save_dir="./", threshold=.92, epsilon=1e-5)
-    predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = Cluster_Algo._cluster_features_into_equivalence_classes(
+    predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = Cluster_Algo.cluster_features_into_equivalence_classes(
         features_dict=supported_consortium_feature_vectors)
     mean_IOU, mean_precision = calculate_mean_iou(predicted_codepoints_cluster_map,
                                                                               predicted_cluster_codepoints_map,
