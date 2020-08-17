@@ -333,7 +333,8 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-    a = EfficientNetFeatureExtractor(model_path ='./model_1/', batch_size = 100, save_dir ='./', multifont_mapping_path ='./fonts/multifont_mapping.pkl')
-    a.extract_and_save_features()
+    _test_dfs_components_finder()
+    #a = EfficientNetFeatureExtractor(model_path ='./model_1/', batch_size = 100, save_dir ='./', multifont_mapping_path ='./fonts/multifont_mapping.pkl')
+    #a.extract_and_save_features()
     #a = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
     #a.find_and_save_equivalence_classes()
