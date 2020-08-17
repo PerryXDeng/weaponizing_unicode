@@ -11,6 +11,8 @@ from cluster_metrics import calculate_mean_iou, calculate_mean_precision
 import time
 import datetime
 
+import argparse
+
 def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file.pkl"):
   return os.path.join(save_dir, features_dict_file)
 
@@ -382,7 +384,19 @@ def run_clique_on_consortium(num_random_additions: int = 0):
 
 if __name__ == "__main__":
   # _test_dfs_components_finder()
+  parser = argparse.ArgumentParser()
+  parser.add_argument('-hc', '--heuristic_choice', action='store', type=str, default='dfs')
+  parser.add_argument('-nra', '--num_rand_add', action='store', type=int, default=0)
+  args = parser.parse_args()
+  num_rand_add = args.num_rand_add
+  hc = args.heuristic_choice
+
   t0 = time.time()
-  run_dfs_on_consortium()
-  #run_clique_on_consortium()
+  print("Heuristic: " + hc)
+  print("Random Additions: " + str(num_rand_add))
+
+  if hc == "clique":
+    run_clique_on_consortium(num_rand_add)
+  elif hc == "dfs":
+    run_dfs_on_consortium(num_rand_add)
   print("Total Elapsed Time: " + str(datetime.timedelta(seconds=time.time() - t0)))
