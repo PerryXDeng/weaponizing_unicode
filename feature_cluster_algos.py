@@ -314,6 +314,15 @@ def greedy_clique_cluster_heuristic(features_dict: dict, target_mean: float, tar
   return predicted_codepoints_cluster_map, predicted_cluster_codepoints_map
 
 
+def baseline_heuristic(features_dict: dict):
+  predicted_codepoints_cluster_map = {}
+  predicted_cluster_codepoints_map = {}
+  for cluster_id, codepoint in enumerate(features_dict.keys()):
+    predicted_codepoints_cluster_map[codepoint] = cluster_id
+    predicted_cluster_codepoints_map[cluster_id] = [codepoint]
+  return predicted_codepoints_cluster_map, predicted_cluster_codepoints_map
+
+
 def _test_dfs_components_finder():
   import matplotlib.pyplot as plt
   import networkx as nx
@@ -357,12 +366,10 @@ def run_dfs_on_consortium(num_random_additions: int = 0):
   Cluster_Algo = CosineSimGraphClustererCPU(save_dir="./", threshold=.92, epsilon=1e-5)
   predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = Cluster_Algo.cluster_features_into_equivalence_classes(
     features_dict=supported_consortium_feature_vectors)
-  mean_IOU, mean_precision = calculate_mean_iou(predicted_codepoints_cluster_map,
-                                                predicted_cluster_codepoints_map,
-                                                ground_truth_consoritium_codepoints_map), calculate_mean_precision(
-    predicted_codepoints_cluster_map,
-    predicted_cluster_codepoints_map,
-    ground_truth_consoritium_codepoints_map)
+  mean_IOU = calculate_mean_iou(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                ground_truth_consoritium_codepoints_map)
+  mean_precision = calculate_mean_precision(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                            ground_truth_consoritium_codepoints_map)
   print(f"Mean IOU: " + str(mean_IOU))
   print(f"Mean precision: " + str(mean_precision))
 
@@ -372,15 +379,24 @@ def run_clique_on_consortium(num_random_additions: int = 0):
     num_random_additions)
   predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = \
     greedy_clique_cluster_heuristic(supported_consortium_feature_vectors, 0.72, 0.01, 0.94)
-  mean_IOU, mean_precision = calculate_mean_iou(predicted_codepoints_cluster_map,
-                                                predicted_cluster_codepoints_map,
-                                                ground_truth_consoritium_codepoints_map), calculate_mean_precision(
-    predicted_codepoints_cluster_map,
-    predicted_cluster_codepoints_map,
-    ground_truth_consoritium_codepoints_map)
+  mean_IOU = calculate_mean_iou(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                ground_truth_consoritium_codepoints_map)
+  mean_precision = calculate_mean_precision(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                            ground_truth_consoritium_codepoints_map)
   print(f"Mean IOU: " + str(mean_IOU))
   print(f"Mean precision: " + str(mean_precision))
 
+
+def run_baseline_on_consortium(num_random_additions: int = 0):
+  supported_consortium_feature_vectors, ground_truth_consoritium_codepoints_map = generate_data_for_experiment(
+    num_random_additions)
+  predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = baseline_heuristic(supported_consortium_feature_vectors)
+  mean_IOU = calculate_mean_iou(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                ground_truth_consoritium_codepoints_map)
+  mean_precision = calculate_mean_precision(predicted_codepoints_cluster_map, predicted_cluster_codepoints_map,
+                                            ground_truth_consoritium_codepoints_map)
+  print(f"Mean IOU: " + str(mean_IOU))
+  print(f"Mean precision: " + str(mean_precision))
 
 if __name__ == "__main__":
   # _test_dfs_components_finder()
@@ -399,4 +415,6 @@ if __name__ == "__main__":
     run_clique_on_consortium(num_rand_add)
   elif hc == "dfs":
     run_dfs_on_consortium(num_rand_add)
+  elif hc == "baseline":
+    run_baseline_on_consortium(num_rand_add)
   print("Total Elapsed Time: " + str(datetime.timedelta(seconds=time.time() - t0)))
