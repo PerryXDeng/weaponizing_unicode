@@ -5,7 +5,6 @@ import cupy as cp
 import tensorflow as tf
 import random
 
-from feature_cluster_algos import CosineSimGraphClustererCPU
 from cluster_metrics import calculate_mean_iou, calculate_mean_coverage, calculate_mean_precision
 
 
@@ -160,17 +159,6 @@ def generate_supported_consortium_feature_vectors_and_clusters_dict(n_clusters, 
         if len(supported_consortium_clusters_dict) == n_clusters:
             break
     return supported_consortium_feature_vectors, supported_consortium_clusters_dict
-
-
-def generate_suppported_consortium_clusters(n_clusters, features_dict_file_path, cos_threshold):
-    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
-        n_clusters, features_dict_file_path)
-    # print(len(supported_consortium_feature_vectors))
-    # print(len(supported_consortium_clusters_dict))
-    cos_Clusterer = CosineSimGraphClustererCPU(save_dir="./", threshold=cos_threshold, epsilon=1e-5)
-    codepoints_cluster_map, cluster_codepoints_map = cos_Clusterer._cluster_features_into_equivalence_classes(
-        supported_consortium_feature_vectors)
-    return codepoints_cluster_map, cluster_codepoints_map, supported_consortium_clusters_dict
 
 
 def convert(dict_):
@@ -377,8 +365,13 @@ def generate_mean_IOU_mean_precision(cluster_predictions, ground_truth_consoriti
 
 
 def calculate_predicted_clusters_IOU_precision():
-    clustered, ground_truth_consoritium_codepoints_map = cluster_test_with_random_characters(100000, .72, .01, .94, 1000)
+    num_random_characters = 3000
+    clustered, ground_truth_consoritium_codepoints_map = cluster_test_with_random_characters(100000, .72, .01, .94, num_random_characters)
     mean_IOU, mean_precision = generate_mean_IOU_mean_precision(clustered, ground_truth_consoritium_codepoints_map)
+    print(mean_IOU, mean_precision)
+    print(f"Mean IOU for {num_random_characters} is: " + str(mean_IOU))
+    print(f"Mean precision for {num_random_characters} is: " + str(mean_precision))
+    
 
 
 if __name__ == '__main__':
