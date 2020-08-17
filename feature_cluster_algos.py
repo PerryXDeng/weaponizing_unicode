@@ -3,8 +3,10 @@ import os
 import numpy as np
 import tensorflow as tf
 import cv2 as cv
+
 from generate_datasets import try_draw_single_font
-from train_triplet_loss_modular import floatify_and_normalize
+from unicode_cons import generate_supported_consortium_feature_vectors_and_clusters_dict, convert
+from cluster_metrics import calculate_mean_iou, calculate_mean_precision
 
 
 def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file.pkl"):
@@ -333,7 +335,16 @@ def _test_dfs_components_finder():
 
 
 if __name__ == "__main__":
-    a = EfficientNetFeatureExtractor(model_path ='./model_1/', batch_size = 100, save_dir ='./', multifont_mapping_path ='./fonts/multifont_mapping.pkl')
-    a.extract_and_save_features()
-    #a = CosineSimGraphClustererGPU(save_dir="./", threshold=.7, epsilon=1e-5)
-    #a.find_and_save_equivalence_classes()
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
+        100000, 'features_dict_file.pkl')
+    ground_truth_consoritium_codepoints_map = convert(supported_consortium_clusters_dict)
+    Cluster_Algo = CosineSimGraphClustererCPU(save_dir="./", threshold=.92, epsilon=1e-5)
+    predicted_codepoints_cluster_map, predicted_cluster_codepoints_map = Cluster_Algo._cluster_features_into_equivalence_classes(
+        features_dict=supported_consortium_feature_vectors)
+    mean_IOU, mean_precision = calculate_mean_iou(predicted_codepoints_cluster_map,
+                                                                              predicted_cluster_codepoints_map,
+                                                                              ground_truth_consoritium_codepoints_map), calculate_mean_precision(predicted_codepoints_cluster_map,
+                                                                              predicted_cluster_codepoints_map,
+                                                                              ground_truth_consoritium_codepoints_map)
+    print(f"Mean IOU: " + str(mean_IOU))
+    print(f"Mean precision: " + str(mean_precision))
