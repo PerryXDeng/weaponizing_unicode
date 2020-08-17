@@ -1,6 +1,7 @@
 import pickle
 import os
 import numpy as np
+import cupy as cp
 import tensorflow as tf
 import cv2 as cv
 
@@ -10,8 +11,8 @@ from cluster_metrics import calculate_mean_iou, calculate_mean_precision
 
 import time
 import datetime
+import tqdm
 
-import argparse
 
 def generate_features_dict_file_path(save_dir: str, features_dict_file="features_dict_file.pkl"):
   return os.path.join(save_dir, features_dict_file)
@@ -160,6 +161,42 @@ def cosine_similarity_matrix_cpu(features: np.ndarray) -> np.ndarray:
   elapsed_seconds = time.time() - start_time
   print("Time spent on similarity matrix: " + str(datetime.timedelta(seconds=elapsed_seconds)))
   return cosine_similarity
+
+
+def cosine_similarity_matrix_gpu_stream(features_cpu: np.ndarray, batch_size: int) -> np.ndarray:
+  start_time = time.time()
+  n, k = features_cpu.shape
+
+  # [n, k] cpu-> gpu
+  features = cp.asarray(features_cpu)
+
+  # [n] gpu
+  norms_gpu = cp.linalg.norm(features, axis=1)
+  norms_a = norms_gpu.reshape((n, 1))
+  norms_b = norms_gpu.reshape((1, n))
+
+
+  # [n, k] gpu
+  a_ = features.reshape((n, 1, 1, k))
+  b_ = features.reshape((1, n, k, 1))
+
+  cosine_similarities = []
+
+  num_batches = n // batch_size
+  for batch_i in range(num_batches):
+    start = batch_i * batch_size
+    end = (batch_i + 1) * batch_size
+    if end > n: end = n
+    norm_a_batch = norms_a[start:end]
+    a_batch = a_[start:end] = a_[start:end]
+    norms_prod_batch = cp.multiply(norm_a_batch, norms_b)
+    dot_products_batch = cp.matmul(a_batch, b_).reshape((batch_size, n))
+    cosine_similarities.append(cp.asnumpy(dot_products_batch / norms_prod_batch).astype(np.float16))
+  cosine_similarities = np.concatenate(cosine_similarities)
+
+  elapsed_seconds = time.time() - start_time
+  print("Time spent on similarity matrix: " + str(datetime.timedelta(seconds=elapsed_seconds)))
+  return cosine_similarities
 
 
 class _AbstractFeatureClusterer:
@@ -314,6 +351,15 @@ def greedy_clique_cluster_heuristic(features_dict: dict, target_mean: float, tar
   return predicted_codepoints_cluster_map, predicted_cluster_codepoints_map
 
 
+def component_into_cliques_heuristic(features_dict: dict, target_mean: float, target_std: float,
+                                     target_threshold: float):
+  ordered_codepoints = list(features_dict.keys())
+  ordered_features = np.stack(list(features_dict.values()))
+  adj_mat = None
+  connected_components = _find_nontrivial_components_from_adjacency_matrix(adj_mat)
+  return
+
+
 def baseline_heuristic(features_dict: dict):
   predicted_codepoints_cluster_map = {}
   predicted_cluster_codepoints_map = {}
@@ -398,23 +444,37 @@ def run_baseline_on_consortium(num_random_additions: int = 0):
   print(f"Mean IOU: " + str(mean_IOU))
   print(f"Mean precision: " + str(mean_precision))
 
+
+def generate_sim_mat_float16_gpu():
+  supported_unicode_feature_vectors = pickle.load(open('features_dict_file.pkl', 'rb'))
+  ordered_features = np.stack(list(supported_unicode_feature_vectors.values()))
+  similarity_matrix = cosine_similarity_matrix_gpu_stream(ordered_features, batch_size=1000)
+  np.save('sim_mat_float16.npy', similarity_matrix)
+
+
+def load_sim_mat_float16():
+  return np.load('sim_mat_float16.npy')
+
+
 if __name__ == "__main__":
   # _test_dfs_components_finder()
-  parser = argparse.ArgumentParser()
-  parser.add_argument('-hc', '--heuristic_choice', action='store', type=str, default='dfs')
-  parser.add_argument('-nra', '--num_rand_add', action='store', type=int, default=0)
-  args = parser.parse_args()
-  num_rand_add = args.num_rand_add
-  hc = args.heuristic_choice
-
-  t0 = time.time()
-  print("Heuristic: " + hc)
-  print("Random Additions: " + str(num_rand_add))
-
-  if hc == "clique":
-    run_clique_on_consortium(num_rand_add)
-  elif hc == "dfs":
-    run_dfs_on_consortium(num_rand_add)
-  elif hc == "baseline":
-    run_baseline_on_consortium(num_rand_add)
-  print("Total Elapsed Time: " + str(datetime.timedelta(seconds=time.time() - t0)))
+  generate_sim_mat_float16_gpu()
+  # import argparse
+  # parser = argparse.ArgumentParser()
+  # parser.add_argument('-hc', '--heuristic_choice', action='store', type=str, default='dfs')
+  # parser.add_argument('-nra', '--num_rand_add', action='store', type=int, default=0)
+  # args = parser.parse_args()
+  # num_rand_add = args.num_rand_add
+  # hc = args.heuristic_choice
+  #
+  # t0 = time.time()
+  # print("Heuristic: " + hc)
+  # print("Random Additions: " + str(num_rand_add))
+  #
+  # if hc == "clique":
+  #   run_clique_on_consortium(num_rand_add)
+  # elif hc == "dfs":
+  #   run_dfs_on_consortium(num_rand_add)
+  # elif hc == "baseline":
+  #   run_baseline_on_consortium(num_rand_add)
+  # print("Total Elapsed Time: " + str(datetime.timedelta(seconds=time.time() - t0)))
