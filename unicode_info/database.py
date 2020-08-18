@@ -25,6 +25,45 @@ __UnicodeMap = List[str]
 UNDEFINED_BLOCK = "undefined"  # for indicating that a character is not defined
 
 
+def generate_positive_pairs_consortium(unicode_clusters_codepoints_map: dict, num_pairs: int):
+  """
+  randomly sample positive pairs of homoglyphs with replacement, returns list of tuples of codepoint_id, codepoint_id
+
+  clusters_codepoints_map: mapping of cluster ids to lists of codepoints
+  """
+  reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
+                     unicode_clusters_codepoints_map[cluster_id]}
+  codepoints = list(reverse_mapping.keys())
+  l = [None] * num_pairs
+  for i in range(num_pairs):
+    code_a = codepoints[random.randint(0, len(codepoints) - 1)]
+    code_b = code_a
+    homoglyphs = unicode_clusters_codepoints_map[reverse_mapping[code_a]]
+    while code_b == code_a:
+      code_b = homoglyphs[random.randint(0, len(homoglyphs) - 1)]
+    l[i] = (code_a, code_b)
+  return l
+
+
+def generate_negative_pairs_consortium(unicode_clusters_codepoints_map: dict, num_pairs: int):
+  """
+  randomly sample positive pairs of homoglyphs with replacement, returns list of tuples of codepoint_id, codepoint_id
+
+  clusters_codepoints_map: mapping of cluster ids to lists of codepoints
+  """
+  reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
+                     unicode_clusters_codepoints_map[cluster_id]}
+  codepoints = list(reverse_mapping.keys())
+  l = [None] * num_pairs
+  for i in range(num_pairs):
+    code_a = codepoints[random.randint(0, len(codepoints) - 1)]
+    code_b = code_a
+    while reverse_mapping[code_b] == reverse_mapping[code_a]:
+      code_b = codepoints[random.randint(0, len(codepoints) - 1)]
+    l[i] = (code_a, code_b)
+  return l
+
+
 def get_consortium_clusters_dict():
   url = 'https://www.unicode.org/Public/security/12.0.0/confusables.txt'
   # Load Text File

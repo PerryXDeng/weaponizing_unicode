@@ -8,11 +8,10 @@ import pickle
 import os
 
 from sklearn import svm
-from sklearn.preprocessing import normalize
-from sklearn.metrics import average_precision_score, precision_recall_curve, plot_precision_recall_curve
+from sklearn.metrics import average_precision_score, precision_recall_curve
 from matplotlib import pyplot as plt
 
-from unicode_cons import generate_supported_consortium_feature_vectors_and_clusters_dict, convert
+from unicode_info.database import generate_data_for_experiment, generate_positive_pairs_consortium, generate_negative_pairs_consortium
 from generate_datasets import try_draw_single_font
 
 
@@ -37,69 +36,49 @@ def ncd_ndarray(x: np.ndarray, y: np.ndarray):
     return ncd(x.tobytes(), y.tobytes())
 
 
-def generate_positive_pairs_consortium(unicode_clusters_codepoints_map: dict, num_pairs: int):
-    """
-    randomly sample positive pairs of homoglyphs with replacement, returns list of tuples of codepoint_id, codepoint_id
-
-    clusters_codepoints_map: mapping of cluster ids to lists of codepoints
-    """
-    reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
-                       unicode_clusters_codepoints_map[cluster_id]}
-    codepoints = list(reverse_mapping.keys())
-    l = [None] * num_pairs
-    for i in range(num_pairs):
-        code_a = codepoints[random.randint(0, len(codepoints) - 1)]
-        code_b = code_a
-        homoglyphs = unicode_clusters_codepoints_map[reverse_mapping[code_a]]
-        while code_b == code_a:
-            code_b = homoglyphs[random.randint(0, len(homoglyphs) - 1)]
-        l[i] = (code_a, code_b)
-    return l
-
-
-def generate_negative_pairs_consortium(unicode_clusters_codepoints_map: dict, num_pairs: int):
-    """
-    randomly sample positive pairs of homoglyphs with replacement, returns list of tuples of codepoint_id, codepoint_id
-
-    clusters_codepoints_map: mapping of cluster ids to lists of codepoints
-    """
-    reverse_mapping = {codepoint: cluster_id for cluster_id in unicode_clusters_codepoints_map.keys() for codepoint in
-                       unicode_clusters_codepoints_map[cluster_id]}
-    codepoints = list(reverse_mapping.keys())
-    l = [None] * num_pairs
-    for i in range(num_pairs):
-        code_a = codepoints[random.randint(0, len(codepoints) - 1)]
-        code_b = code_a
-        while reverse_mapping[code_b] == reverse_mapping[code_a]:
-            code_b = codepoints[random.randint(0, len(codepoints) - 1)]
-        l[i] = (code_a, code_b)
-    return l
-
-
-def train_svm_generate_statistics_and_auc(measures: np.ndarray, labels: np.ndarray):
+def train_svm_generate_statistics_and_auc(similarities: np.ndarray, compression_dists: np.ndarray, labels: np.ndarray):
     """
     dim measures = [n], dtype = float
     dim labels = [n], dtype = int
     """
     classifier = svm.SVC(kernel='linear')
-    measures = measures.reshape(-1, 1)# dim [n, 1]
+
+    measures = similarities.reshape(-1, 1)# dim [n, 1]
     classifier.fit(measures, labels)
-    print("Accuracy: {0:0.2f}".format(classifier.score(measures, labels)))
     y_score = classifier.decision_function(measures)
-    average_precision = average_precision_score(labels, y_score)
-    print('Average precision-recall score: {0:0.2f}'.format(
-        average_precision))
+    deep_acc = classifier.score(measures, labels)
+    deep_ap = average_precision_score(labels, y_score)
+    deep_precision, deep_recall, _ = precision_recall_curve(labels, y_score)
+
+    measures = compression_dists.reshape(-1, 1)# dim [n, 1]
+    classifier.fit(measures, labels)
+    y_score = classifier.decision_function(measures)
+    ncd_acc = classifier.score(measures, labels)
+    ncd_ap = average_precision_score(labels, y_score)
+    ncd_precision, ncd_recall, _ = precision_recall_curve(labels, y_score)
+
+    plt.figure()
     plt.rcParams.update({'font.size': 22})
-    disp = plot_precision_recall_curve(classifier, measures, labels)
+    lines = []
+    labs = []
+    lines.append(plt.plot(deep_recall, deep_precision, color="C0", lw=2)[0])
+    labs.append("Our Approach, Acc.: {0:0.3f}, AP: {1:0.3f}".format(deep_acc, deep_ap))
+    lines.append(plt.plot(ncd_recall, ncd_precision, color="C1", lw=2)[0])
+    labs.append("NCD Approach, Acc.: {0:0.3f}, AP: {1:0.3f}".format(ncd_acc, ncd_ap))
+    fig = plt.gcf()
+    fig.subplots_adjust(bottom=0.25)
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.legend(lines, labs, loc='lower left', prop=dict(size=22))
     plt.show()
 
 
 def comparison():
     num_pairs = 1000
 
-    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_supported_consortium_feature_vectors_and_clusters_dict(
-        9999, 'features_dict_file.pkl')
-    ground_truth_consortium_codepoints_map = convert(supported_consortium_clusters_dict)
+    supported_consortium_feature_vectors, supported_consortium_clusters_dict = generate_data_for_experiment()
 
     min_supported_fonts_dict = pickle.load(open('min_supported_fonts.pkl', 'rb'))
 
@@ -109,8 +88,8 @@ def comparison():
     img_size, font_size = model_info_dict['img_size'], model_info_dict['font_size']
     empty_image = np.full((img_size, img_size), 255)
 
-    positive_pairs = generate_positive_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
-    negative_pairs = generate_negative_pairs_consortium(ground_truth_consortium_codepoints_map, num_pairs)
+    positive_pairs = generate_positive_pairs_consortium(supported_consortium_clusters_dict, num_pairs)
+    negative_pairs = generate_negative_pairs_consortium(supported_consortium_clusters_dict, num_pairs)
     pairs = positive_pairs + negative_pairs
 
     labels = np.zeros(num_pairs * 2, dtype=int)
@@ -131,11 +110,7 @@ def comparison():
                 np.linalg.norm(features_x) * np.linalg.norm(features_y))
         normalized_compression_distances[i] = ncd_ndarray(glyph_x, glyph_y)
 
-    print("DEEP")
-    train_svm_generate_statistics_and_auc(cosine_similarities, labels)
-    print("NCD")
-    train_svm_generate_statistics_and_auc(normalized_compression_distances, labels)
-
+    train_svm_generate_statistics_and_auc(cosine_similarities, normalized_compression_distances, labels)
 
 if __name__ == '__main__':
     comparison()
