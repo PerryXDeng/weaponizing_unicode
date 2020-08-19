@@ -1,5 +1,8 @@
 logs
 
+# slurm stuff
+slurm*
+
 # Binary data
 sim_mat_float16.npy
 features_dict_file.pkl
