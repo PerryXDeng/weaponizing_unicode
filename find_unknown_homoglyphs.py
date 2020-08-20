@@ -12,7 +12,7 @@ def find_indices_of_homoglyphs_gpu(sim_mat:np.ndarray, threshold:float, batch_si
     start = batch_i * batch_size
     end = (batch_i + 1) * batch_size
     if end > n: end = n
-    homoglyph_indices.append(cp.asnumpy(cp.nonzero(cp.sum((cp.asarray(sim_mat[start:end]) > threshold), axis=1)-1)[0]) + start)
+    homoglyph_indices.append(cp.asnumpy(cp.nonzero(cp.count_nonzero((cp.asarray(sim_mat[start:end]) > threshold), axis=1)-1)[0]) + start)
   return set(np.concatenate(homoglyph_indices))
 
 

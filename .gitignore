@@ -4,6 +4,7 @@ logs
 slurm*
 
 # Binary data
+simmap_pointninethreshold.pkl
 sim_mat_float16.npy
 features_dict_file.pkl
 min_supported_fonts.pkl
